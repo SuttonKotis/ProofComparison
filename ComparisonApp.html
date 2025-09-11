@@ -1,0 +1,2569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Comparison App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <style>
+        body, html {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin: 0 0 20px 0;
+            font-size: 28px;
+        }
+        #dropZone {
+            flex: 1;
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            background-color: #ffffff;
+            min-height: 300px;
+        }
+        #dropZone:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #dropText {
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 18px;
+            color: #2c3e50;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        #dropZone:hover #dropText {
+            transform: scale(1.05);
+        }
+        #imageInfo {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            align-items: center;
+        }
+        #includeButton {
+            background-color: #9b59b6;
+        }
+        #includeButton:hover {
+            background-color: #8e44ad;
+        }
+        /* Modal styles for included images */
+        #includedImagesModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: none;
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+        #includedImagesModal.active {
+            display: flex;
+        }
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            background-color: #2c3e50;
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            color: white;
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .modal-close {
+            font-size: 30px;
+            color: white;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            color: #e74c3c;
+        }
+        .modal-body {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            width: 100%;
+            padding: 10px;
+        }
+        .modal-image-wrapper {
+            position: relative;
+            aspect-ratio: 1;
+            background-color: #34495e;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .modal-image-wrapper:hover {
+            transform: scale(1.05);
+        }
+        .modal-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .modal-image-name {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            font-size: 12px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .remove-modal-image {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 25px;
+            height: 25px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .modal-image-wrapper:hover .remove-modal-image {
+            opacity: 1;
+        }
+        .remove-modal-image:hover {
+            background-color: #c0392b;
+        }
+        .modal-drop-zone {
+            border: 3px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 600px;
+        }
+        .modal-drop-zone:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+        .modal-drop-zone.dragover {
+            background-color: rgba(52, 152, 219, 0.2);
+            border-color: #2980b9;
+        }
+        .drop-text {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .drop-subtext {
+            font-size: 14px;
+            color: #95a5a6;
+        }
+        .image-viewer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            display: none;
+            z-index: 10001;
+            justify-content: center;
+            align-items: center;
+        }
+        .image-viewer-overlay.active {
+            display: flex;
+        }
+        .viewer-image {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+        .viewer-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .viewer-close:hover {
+            color: #e74c3c;
+        }
+        .viewer-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .viewer-nav:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        .viewer-prev {
+            left: 20px;
+        }
+        .viewer-next {
+            right: 20px;
+        }
+        .viewer-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .image-label {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            font-size: 16px;
+            color: #34495e;
+            transition: all 0.3s ease;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+        .image-label:hover {
+            background-color: #d6e0e4;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: #fff;
+            border-radius: 5px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 0 5px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #ghostButton {
+            background-color: #34495e;
+        }
+        #ghostButton:hover {
+            background-color: #2c3e50;
+        }
+        #ghostButton.active {
+            background-color: #16a085;
+        }
+        #resetAlignmentButton {
+            background-color: #e67e22;
+            display: none;
+            position: relative;
+            overflow: hidden;
+        }
+        #resetAlignmentButton:hover {
+            background-color: #d35400;
+        }
+        .reset-progress {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .reset-progress.active {
+            opacity: 1;
+        }
+        .progress-circle {
+            width: 40px;
+            height: 40px;
+            transform: rotate(-90deg);
+        }
+        .progress-stroke {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.8);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 113; /* 2 * PI * 18 (radius) */
+            stroke-dashoffset: 113;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+        .progress-stroke.animating {
+            animation: progress-fill 1.5s linear forwards;
+        }
+        @keyframes progress-fill {
+            from {
+                stroke-dashoffset: 113;
+            }
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        .scale-handle {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: rgba(52, 152, 219, 0.8);
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: nwse-resize;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        .scale-handle:hover {
+            background-color: rgba(52, 152, 219, 1);
+        }
+        #ghostCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+        #dropZone.ghost-mode {
+            cursor: move;
+        }
+        .instructions {
+            text-align: center;
+            font-size: 16px;
+            color: #7f8c8d;
+        }
+        .instance-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 64px;
+            color: #3498db;
+            cursor: pointer;
+            user-select: none;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #prevInstance {
+            left: 10px;
+        }
+        #nextInstance {
+            right: 10px;
+        }
+        .instance-arrow:hover {
+            background-color: #ecf0f1;
+            color: #2980b9;
+        }
+        #pasteOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: #fff;
+            font-size: 24px;
+            text-align: center;
+        }
+        #controlBar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            z-index: 100;
+            align-items: center;
+        }
+        
+        #sessionId {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #3498db;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            margin-left: 5px;
+            text-align: center;
+        }
+        #assignedTo {
+            padding: 8px;
+            border: 1px solid #3498db;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            margin-left: 5px;
+            background-color: white;
+            cursor: pointer;
+        }
+        #notesArea {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            width: 250px;
+        }
+        
+        #instanceNotes {
+            width: 100%;
+            height: 80px;
+            padding: 8px;
+            border: 1px solid #3498db;
+            border-radius: 5px;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+        
+        #notesLabel {
+            font-size: 14px;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            display: block;
+        }
+        #statusMessage {
+            margin-top: 10px;
+            text-align: center;
+            color: #27ae60;
+            font-weight: bold;
+            height: 20px;
+            transition: opacity 0.5s ease;
+        }
+        .hidden {
+            opacity: 0;
+        }
+        
+        /* Drawing Editor Styles */
+        .drawing-editor {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f0f4f8;
+        }
+        .drawing-toolbar {
+            background-color: #2c3e50;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .drawing-toolbar button {
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: #fff;
+            border-radius: 5px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .drawing-toolbar button:hover {
+            background-color: #2980b9;
+        }
+        .drawing-toolbar button.active {
+            background-color: #27ae60;
+        }
+        .toolbar-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 0 10px;
+            border-right: 1px solid #34495e;
+        }
+        .toolbar-group:last-child {
+            border-right: none;
+        }
+        .color-picker {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .brush-size {
+            width: 60px;
+            margin: 0 5px;
+        }
+        .drawing-canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ddd;
+            position: relative;
+        }
+        #fabricCanvas {
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="controlBar">
+            <button id="saveButton">Save Session</button>
+            <button id="loadButton">Load Session</button>
+            <button id="includeButton">Include Image</button>
+            <input type="text" id="sessionId" placeholder="Enter 6-digit ID" maxlength="6" pattern="\d{6}" title="Please enter a 6-digit number">
+            <select id="assignedTo" name="assignedTo">
+                <option value="" selected>Select Name</option>
+                <option value="Molly Corbett">Molly Corbett</option>
+                <option value="Karissa Krouse">Karissa Krouse</option>
+                <option value="JL Diaz">JL Diaz</option>
+                <option value="Rafh Pangan">Rafh Pangan</option>
+                <option value="Hannah Ellertson">Hannah Ellertson</option>
+                <option value="Ash Pasion">Ash Pasion</option>
+                <option value="Geri Willis">Geri Willis</option>
+                <option value="Kayla DePalma">Kayla DePalma</option>
+                <option value="Recie Baker">Recie Baker</option>
+            </select>
+        </div>
+        <div id="notesArea">
+            <label id="notesLabel" for="instanceNotes">Instance Notes:</label>
+            <textarea id="instanceNotes" placeholder="Add notes about this comparison..."></textarea>
+        </div>
+        <h1 id="title" contenteditable="true">Image Comparison App - Instance 1</h1>
+        <div id="statusMessage" class="hidden"></div>
+        <div id="dropZone">
+            <canvas id="canvas"></canvas>
+            <canvas id="ghostCanvas"></canvas>
+            <div class="scale-handle" id="scaleHandle"></div>
+            <div id="dropText">Drop images here or click to select</div>
+        </div>
+        <div id="imageInfo">
+            <div id="image1Label" class="image-label">Supplier Proof: None</div>
+            <button id="ghostButton">Ghost</button>
+            <button id="resetAlignmentButton">
+                Reset
+                <div class="reset-progress" id="resetProgress">
+                    <svg class="progress-circle" viewBox="0 0 40 40">
+                        <circle class="progress-stroke" cx="20" cy="20" r="18"></circle>
+                    </svg>
+                </div>
+            </button>
+            <button id="sideBySideButton">Annotate</button>
+            <div id="image2Label" class="image-label">Kotis Proof: None</div>
+        </div>
+        <div id="prevInstance" class="instance-arrow">&#10094;</div>
+        <div id="nextInstance" class="instance-arrow">&#10095;</div>
+    </div>
+
+    <!-- Modal for included images -->
+    <div id="includedImagesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">Additional Images</span>
+                <button class="modal-close" onclick="closeIncludedImagesModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="modal-drop-zone" id="modalDropZone">
+                    <div class="drop-text">Drop images here or click to select</div>
+                    <div class="drop-subtext">Add annotations, references, or any supporting images</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image viewer overlay -->
+    <div id="imageViewerOverlay" class="image-viewer-overlay">
+        <button class="viewer-close" onclick="closeImageViewer()">&times;</button>
+        <button class="viewer-nav viewer-prev" onclick="viewPrevImage()">&#10094;</button>
+        <button class="viewer-nav viewer-next" onclick="viewNextImage()">&#10095;</button>
+        <img id="viewerImage" class="viewer-image" src="" alt="">
+        <div class="viewer-info" id="viewerInfo"></div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const dropText = document.getElementById('dropText');
+        const image1Label = document.getElementById('image1Label');
+        const image2Label = document.getElementById('image2Label');
+        const title = document.getElementById('title');
+        const sideBySideButton = document.getElementById('sideBySideButton');
+        const saveButton = document.getElementById('saveButton');
+        const loadButton = document.getElementById('loadButton');
+        const statusMessage = document.getElementById('statusMessage');
+        const instanceNotes = document.getElementById('instanceNotes');
+        const includeButton = document.getElementById('includeButton');
+        const includedImagesModal = document.getElementById('includedImagesModal');
+        const modalBody = document.getElementById('modalBody');
+        const modalDropZone = document.getElementById('modalDropZone');
+        const imageViewerOverlay = document.getElementById('imageViewerOverlay');
+        let currentViewingIndex = 0;
+        
+        // Ghost mode elements and variables
+        const ghostCanvas = document.getElementById('ghostCanvas');
+        const ghostCtx = ghostCanvas.getContext('2d');
+        const ghostButton = document.getElementById('ghostButton');
+        const resetAlignmentButton = document.getElementById('resetAlignmentButton');
+        const resetProgress = document.getElementById('resetProgress');
+        const scaleHandle = document.getElementById('scaleHandle');
+        let ghostMode = false;
+        let resetHoldTimer = null;
+        let resetStartTime = 0;
+        let isDragging = false;
+        let isScaling = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let scaleStartX = 0;
+        let scaleStartY = 0;
+        let originalScale = 1;
+
+        let instances = [{
+            image1: null,
+            image2: null,
+            image1Name: null,
+            image2Name: null,
+            currentImage: 1,
+            title: '',
+            image1Data: null,
+            image2Data: null,
+            notes: '',
+            sessionId: '',
+            assignedTo: '',
+            includedImages: [],
+            alignmentSettings: {
+                image1: { x: 0, y: 0, scale: 1 },
+                image2: { x: 0, y: 0, scale: 1 },
+                ghostOpacity: 0.6
+            }
+        }];
+        let currentInstanceIndex = 0;
+        let currentPasteTarget = null;
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            loadImages(files);
+        }
+
+        function handleClick() {
+            // Don't load images if in ghost mode - clicking is for panning
+            if (ghostMode) return;
+            
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.onchange = (e) => loadImages(Array.from(e.target.files));
+            input.click();
+        }
+
+        function loadImages(files) {
+            if (files.length > 2) {
+                alert('Please select only two images.');
+                return;
+            }
+
+            const instance = instances[currentInstanceIndex];
+
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (index === 0) {
+                            instance.image1 = img;
+                            instance.image1Name = file.name;
+                            instance.image1Data = e.target.result;
+                            image1Label.textContent = `Supplier Proof: ${file.name}`;
+                        } else {
+                            instance.image2 = img;
+                            instance.image2Name = file.name;
+                            instance.image2Data = e.target.result;
+                            image2Label.textContent = `Kotis Proof: ${file.name}`;
+                        }
+                        if (instance.image1 && instance.image2) {
+                            dropText.style.display = 'none';
+                            showImage(1);
+                        } else if (instance.image1 || instance.image2) {
+                            dropText.style.display = 'none';
+                            showImage(instance.currentImage);
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function showImage(imageNumber) {
+            const instance = instances[currentInstanceIndex];
+            const img = imageNumber === 1 ? instance.image1 : instance.image2;
+            if (!img) return;
+
+            canvas.width = dropZone.clientWidth;
+            canvas.height = dropZone.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (ghostMode) {
+                // In ghost mode, draw the non-active image as background
+                const otherImageNumber = imageNumber === 1 ? 2 : 1;
+                const otherImg = otherImageNumber === 1 ? instance.image1 : instance.image2;
+                
+                if (otherImg) {
+                    // Draw the other image (background) with its alignment settings
+                    const otherAlignment = instance.alignmentSettings[`image${otherImageNumber}`];
+                    const otherBaseScale = Math.min(canvas.width / otherImg.width, canvas.height / otherImg.height);
+                    const otherFinalScale = otherBaseScale * otherAlignment.scale;
+                    
+                    const otherBaseX = (canvas.width / 2) - (otherImg.width / 2) * otherFinalScale;
+                    const otherBaseY = (canvas.height / 2) - (otherImg.height / 2) * otherFinalScale;
+                    const otherX = otherBaseX + otherAlignment.x;
+                    const otherY = otherBaseY + otherAlignment.y;
+                    
+                    ctx.drawImage(otherImg, otherX, otherY, otherImg.width * otherFinalScale, otherImg.height * otherFinalScale);
+                }
+                
+                // Now draw the current image on the ghost canvas (overlay)
+                updateGhostOverlay();
+            } else {
+                // Normal mode - just draw the current image with its alignment
+                const alignment = instance.alignmentSettings[`image${imageNumber}`];
+                const baseScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                const finalScale = baseScale * alignment.scale;
+                
+                const baseX = (canvas.width / 2) - (img.width / 2) * finalScale;
+                const baseY = (canvas.height / 2) - (img.height / 2) * finalScale;
+                const x = baseX + alignment.x;
+                const y = baseY + alignment.y;
+                
+                ctx.drawImage(img, x, y, img.width * finalScale, img.height * finalScale);
+            }
+            
+            instance.currentImage = imageNumber;
+        }
+        
+        function updateGhostOverlay() {
+            const instance = instances[currentInstanceIndex];
+            const currentImg = instance.currentImage === 1 ? instance.image1 : instance.image2;
+            const otherImg = instance.currentImage === 1 ? instance.image2 : instance.image1;
+            
+            if (!currentImg || !otherImg) {
+                ghostCanvas.style.display = 'none';
+                return;
+            }
+            
+            // Setup ghost canvas
+            ghostCanvas.width = canvas.width;
+            ghostCanvas.height = canvas.height;
+            ghostCanvas.style.display = 'block';
+            ghostCtx.clearRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+            
+            // Draw the current image with opacity on top
+            ghostCtx.globalAlpha = instance.alignmentSettings.ghostOpacity;
+            
+            const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+            const baseScale = Math.min(canvas.width / currentImg.width, canvas.height / currentImg.height);
+            const finalScale = baseScale * alignment.scale;
+            
+            const baseX = (canvas.width / 2) - (currentImg.width / 2) * finalScale;
+            const baseY = (canvas.height / 2) - (currentImg.height / 2) * finalScale;
+            const x = baseX + alignment.x;
+            const y = baseY + alignment.y;
+            
+            ghostCtx.drawImage(currentImg, x, y, currentImg.width * finalScale, currentImg.height * finalScale);
+            
+            // Update scale handle position
+            updateScaleHandlePosition();
+        }
+        
+        function updateScaleHandlePosition() {
+            const instance = instances[currentInstanceIndex];
+            const currentImg = instance.currentImage === 1 ? instance.image1 : instance.image2;
+            if (!currentImg) return;
+            
+            const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+            const baseScale = Math.min(canvas.width / currentImg.width, canvas.height / currentImg.height);
+            const finalScale = baseScale * alignment.scale;
+            
+            // Position handle at center of the image
+            const centerX = (canvas.width / 2) + alignment.x;
+            const centerY = (canvas.height / 2) + alignment.y;
+            
+            scaleHandle.style.left = (dropZone.offsetLeft + centerX - 15) + 'px';
+            scaleHandle.style.top = (dropZone.offsetTop + centerY - 15) + 'px';
+            scaleHandle.style.display = ghostMode ? 'block' : 'none';
+        }
+
+        function resizeCanvas() {
+            const instance = instances[currentInstanceIndex];
+            if (instance.image1 || instance.image2) {
+                showImage(instance.currentImage || 1);
+                if (ghostMode) {
+                    updateScaleHandlePosition();
+                }
+            }
+        }
+
+        function prevInstance() {
+            if (currentInstanceIndex > 0) {
+                // Save current notes and title before switching
+                saveTitle();
+                saveNotes();
+                
+                currentInstanceIndex--;
+                updateInstanceDisplay();
+            }
+        }
+
+        function nextInstance() {
+            // Save current notes and title before switching
+            saveTitle();
+            saveNotes();
+            
+            currentInstanceIndex++;
+            if (!instances[currentInstanceIndex]) {
+                instances[currentInstanceIndex] = {
+                    image1: null,
+                    image2: null,
+                    image1Name: null,
+                    image2Name: null,
+                    currentImage: 1,
+                    title: '',
+                    image1Data: null,
+                    image2Data: null,
+                    notes: '',
+                    sessionId: instances[0].sessionId || '', // Inherit session ID from first instance
+                    assignedTo: instances[0].assignedTo || '', // Inherit assigned name from first instance
+                    includedImages: [],
+                    alignmentSettings: {
+                        image1: { x: 0, y: 0, scale: 1 },
+                        image2: { x: 0, y: 0, scale: 1 },
+                        ghostOpacity: 0.6
+                    }
+                };
+            }
+            updateInstanceDisplay();
+        }
+
+        function updateInstanceDisplay() {
+            const instance = instances[currentInstanceIndex];
+            image1Label.textContent = instance.image1Name ? `Supplier Proof: ${instance.image1Name}` : 'Supplier Proof: None';
+            image2Label.textContent = instance.image2Name ? `Kotis Proof: ${instance.image2Name}` : 'Kotis Proof: None';
+            title.textContent = instance.title || `Image Comparison App - Instance ${currentInstanceIndex + 1}`;
+            instanceNotes.value = instance.notes || '';
+            
+            // Update the session ID field
+            document.getElementById('sessionId').value = instance.sessionId || '';
+            
+            // Update the assigned to field
+            document.getElementById('assignedTo').value = instance.assignedTo || '';
+
+            if (instance.image1 || instance.image2) {
+                dropText.style.display = 'none';
+                showImage(instance.currentImage || 1);
+            } else {
+                dropText.style.display = 'block';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // No need to update display here since images are in modal
+        }
+        
+        // Modal functions
+        function openIncludedImagesModal() {
+            includedImagesModal.classList.add('active');
+            updateModalDisplay();
+            // Set up paste listener when modal opens
+            setupModalPasteListener();
+        }
+        
+        function closeIncludedImagesModal() {
+            includedImagesModal.classList.remove('active');
+            // Remove paste listener when modal closes
+            document.removeEventListener('paste', handleModalPaste);
+        }
+        
+        function updateModalDisplay() {
+            const instance = instances[currentInstanceIndex];
+            
+            if (!instance.includedImages || instance.includedImages.length === 0) {
+                modalBody.innerHTML = '';
+                modalBody.appendChild(createDropZone());
+            } else {
+                modalBody.innerHTML = '';
+                const grid = document.createElement('div');
+                grid.className = 'images-grid';
+                
+                // Add drop zone as first item
+                const dropZoneWrapper = document.createElement('div');
+                dropZoneWrapper.className = 'modal-image-wrapper';
+                dropZoneWrapper.style.display = 'flex';
+                dropZoneWrapper.style.alignItems = 'center';
+                dropZoneWrapper.style.justifyContent = 'center';
+                dropZoneWrapper.style.border = '2px dashed #3498db';
+                dropZoneWrapper.style.cursor = 'pointer';
+                dropZoneWrapper.innerHTML = '<div style="color: #3498db; text-align: center;">+ Add More<br><span style="font-size: 11px;">Click or Paste</span></div>';
+                dropZoneWrapper.onclick = () => selectFiles();
+                setupDropEvents(dropZoneWrapper);
+                grid.appendChild(dropZoneWrapper);
+                
+                // Add existing images
+                instance.includedImages.forEach((imgData, index) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'modal-image-wrapper';
+                    
+                    const img = document.createElement('img');
+                    img.className = 'modal-image';
+                    img.src = imgData.data;
+                    img.onclick = () => openImageViewer(index);
+                    
+                    const name = document.createElement('div');
+                    name.className = 'modal-image-name';
+                    name.textContent = imgData.name;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-modal-image';
+                    removeBtn.innerHTML = '×';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        removeIncludedImage(index);
+                    };
+                    
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(name);
+                    wrapper.appendChild(removeBtn);
+                    grid.appendChild(wrapper);
+                });
+                
+                modalBody.appendChild(grid);
+            }
+        }
+        
+        function createDropZone() {
+            const dropZone = document.createElement('div');
+            dropZone.className = 'modal-drop-zone';
+            dropZone.innerHTML = `
+                <div class="drop-text">Drop images here, click to select, or paste (Ctrl/Cmd+V)</div>
+                <div class="drop-subtext">Add annotations, references, or any supporting images</div>
+            `;
+            dropZone.onclick = selectFiles;
+            setupDropEvents(dropZone);
+            return dropZone;
+        }
+        
+        function setupDropEvents(element) {
+            element.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                element.classList.add('dragover');
+            });
+            
+            element.addEventListener('dragleave', () => {
+                element.classList.remove('dragover');
+            });
+            
+            element.addEventListener('drop', (e) => {
+                e.preventDefault();
+                element.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+                processFiles(files);
+            });
+        }
+        
+        function selectFiles() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.onchange = (e) => {
+                const files = Array.from(e.target.files);
+                processFiles(files);
+            };
+            input.click();
+        }
+        
+        function processFiles(files) {
+            const instance = instances[currentInstanceIndex];
+            if (!instance.includedImages) {
+                instance.includedImages = [];
+            }
+            
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    instance.includedImages.push({
+                        name: file.name,
+                        data: event.target.result
+                    });
+                    updateModalDisplay();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function removeIncludedImage(index) {
+            const instance = instances[currentInstanceIndex];
+            instance.includedImages.splice(index, 1);
+            updateModalDisplay();
+        }
+        
+        // Image viewer functions
+        function openImageViewer(index) {
+            const instance = instances[currentInstanceIndex];
+            if (!instance.includedImages || instance.includedImages.length === 0) return;
+            
+            currentViewingIndex = index;
+            const imgData = instance.includedImages[index];
+            
+            document.getElementById('viewerImage').src = imgData.data;
+            document.getElementById('viewerInfo').textContent = `${imgData.name} (${index + 1} of ${instance.includedImages.length})`;
+            
+            imageViewerOverlay.classList.add('active');
+        }
+        
+        function closeImageViewer() {
+            imageViewerOverlay.classList.remove('active');
+        }
+        
+        function viewPrevImage() {
+            const instance = instances[currentInstanceIndex];
+            if (!instance.includedImages || instance.includedImages.length === 0) return;
+            
+            currentViewingIndex = (currentViewingIndex - 1 + instance.includedImages.length) % instance.includedImages.length;
+            openImageViewer(currentViewingIndex);
+        }
+        
+        function viewNextImage() {
+            const instance = instances[currentInstanceIndex];
+            if (!instance.includedImages || instance.includedImages.length === 0) return;
+            
+            currentViewingIndex = (currentViewingIndex + 1) % instance.includedImages.length;
+            openImageViewer(currentViewingIndex);
+        }
+        
+        // Paste handling for modal
+        function handleModalPaste(e) {
+            // Only handle paste if modal is active
+            if (!includedImagesModal.classList.contains('active')) return;
+            
+            e.preventDefault();
+            const clipboardItems = e.clipboardData.items;
+            const imageFiles = [];
+            
+            for (let i = 0; i < clipboardItems.length; i++) {
+                const item = clipboardItems[i];
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
+                    imageFiles.push(new File([blob], `Pasted Image ${Date.now()}.png`, { type: blob.type }));
+                }
+            }
+            
+            if (imageFiles.length > 0) {
+                processFiles(imageFiles);
+            }
+        }
+        
+        function setupModalPasteListener() {
+            // Remove any existing listener first
+            document.removeEventListener('paste', handleModalPaste);
+            // Add new listener
+            document.addEventListener('paste', handleModalPaste);
+        }
+
+        function saveTitle() {
+            const instance = instances[currentInstanceIndex];
+            instance.title = title.textContent.trim();
+            if (!instance.title) {
+                instance.title = `Image Comparison App - Instance ${currentInstanceIndex + 1}`;
+                title.textContent = instance.title;
+            }
+        }
+        
+        function saveNotes() {
+            const instance = instances[currentInstanceIndex];
+            instance.notes = instanceNotes.value;
+        }
+        
+        function saveSessionId() {
+            const sessionIdInput = document.getElementById('sessionId');
+            const instance = instances[currentInstanceIndex];
+            
+            // Only allow digits and limit to 6 characters
+            sessionIdInput.value = sessionIdInput.value.replace(/\D/g, '').substring(0, 6);
+            
+            // Save the session ID
+            instance.sessionId = sessionIdInput.value;
+        }
+        
+        function saveAssignedTo() {
+            const assignedToSelect = document.getElementById('assignedTo');
+            const instance = instances[currentInstanceIndex];
+            instance.assignedTo = assignedToSelect.value;
+        }
+
+        // Real-time saving of notes, title, session ID, and assigned to
+        instanceNotes.addEventListener('input', saveNotes);
+        title.addEventListener('blur', saveTitle);
+        document.getElementById('sessionId').addEventListener('input', saveSessionId);
+        document.getElementById('assignedTo').addEventListener('change', saveAssignedTo);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.metaKey || e.ctrlKey) {
+                // CMD or CTRL + Arrow keys to switch instances
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    prevInstance();
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    nextInstance();
+                }
+                // CMD or CTRL + S to save
+                if (e.key === 's') {
+                    e.preventDefault();
+                    saveSession();
+                }
+                // CMD or CTRL + O to load
+                if (e.key === 'o') {
+                    e.preventDefault();
+                    loadSession();
+                }
+            } else {
+                // Arrow keys to switch images
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    showImage(1);
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    showImage(2);
+                }
+            }
+        });
+
+        function promptForPaste() {
+            // Create an overlay that says "Press Ctrl+V to paste your image"
+            const overlay = document.createElement('div');
+            overlay.id = 'pasteOverlay';
+            overlay.innerText = 'Press Ctrl+V (or Cmd+V) to paste your image';
+            document.body.appendChild(overlay);
+
+            // Create a hidden textarea to receive the paste event
+            const hiddenTextarea = document.createElement('textarea');
+            hiddenTextarea.style.position = 'absolute';
+            hiddenTextarea.style.opacity = 0;
+            hiddenTextarea.style.left = '-1000px';
+            hiddenTextarea.style.top = '-1000px';
+            document.body.appendChild(hiddenTextarea);
+            hiddenTextarea.focus();
+
+            const pasteHandler = (e) => {
+                e.preventDefault();
+                const clipboardItems = e.clipboardData.items;
+                for (let i = 0; i < clipboardItems.length; i++) {
+                    const item = clipboardItems[i];
+                    if (item.type.indexOf('image') !== -1) {
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const instance = instances[currentInstanceIndex];
+                                if (currentPasteTarget === 1) {
+                                    instance.image1 = img;
+                                    instance.image1Name = 'Pasted Image';
+                                    instance.image1Data = event.target.result;
+                                    image1Label.textContent = 'Supplier Proof: Pasted Image';
+                                } else if (currentPasteTarget === 2) {
+                                    instance.image2 = img;
+                                    instance.image2Name = 'Pasted Image';
+                                    instance.image2Data = event.target.result;
+                                    image2Label.textContent = 'Kotis Proof: Pasted Image';
+                                }
+                                if (instance.image1 && instance.image2) {
+                                    dropText.style.display = 'none';
+                                    showImage(1);
+                                } else if (instance.image1 || instance.image2) {
+                                    dropText.style.display = 'none';
+                                    showImage(instance.currentImage);
+                                }
+                                cleanupPaste();
+                            };
+                            img.src = event.target.result;
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            };
+
+            function keyDownHandler(e) {
+                if (e.key === 'Escape') {
+                    cleanupPaste();
+                }
+            }
+
+            function cleanupPaste() {
+                document.body.removeChild(overlay);
+                document.body.removeChild(hiddenTextarea);
+                document.removeEventListener('paste', pasteHandler);
+                document.removeEventListener('keydown', keyDownHandler);
+                currentPasteTarget = null;
+            }
+
+            overlay.addEventListener('click', () => {
+                cleanupPaste();
+            });
+
+            document.addEventListener('paste', pasteHandler);
+            document.addEventListener('keydown', keyDownHandler);
+        }
+
+        image1Label.addEventListener('click', () => {
+            currentPasteTarget = 1;
+            promptForPaste();
+        });
+
+        image2Label.addEventListener('click', () => {
+            currentPasteTarget = 2;
+            promptForPaste();
+        });
+
+        sideBySideButton.addEventListener('click', () => {
+            const instance = instances[currentInstanceIndex];
+            if (instance.image1 || instance.image2) {
+                openDrawingEditor(instance.image1, instance.image2);
+            } else {
+                alert('Please load at least one image.');
+            }
+        });
+        
+        includeButton.addEventListener('click', openIncludedImagesModal);
+        
+        // Ghost mode functionality
+        ghostButton.addEventListener('click', toggleGhostMode);
+        
+        // Hold-to-reset functionality
+        resetAlignmentButton.addEventListener('mousedown', startResetHold);
+        resetAlignmentButton.addEventListener('mouseup', cancelResetHold);
+        resetAlignmentButton.addEventListener('mouseleave', cancelResetHold);
+        
+        function toggleGhostMode() {
+            ghostMode = !ghostMode;
+            const instance = instances[currentInstanceIndex];
+            
+            if (ghostMode) {
+                ghostButton.classList.add('active');
+                ghostButton.textContent = 'Unghost';
+                resetAlignmentButton.style.display = 'inline-block';
+                dropZone.classList.add('ghost-mode');
+                
+                // Force a redraw to show ghost overlay immediately
+                showImage(instance.currentImage);
+            } else {
+                ghostButton.classList.remove('active');
+                ghostButton.textContent = 'Ghost';
+                resetAlignmentButton.style.display = 'none';
+                dropZone.classList.remove('ghost-mode');
+                ghostCanvas.style.display = 'none';
+                scaleHandle.style.display = 'none';
+                
+                // Redraw without ghost overlay
+                showImage(instance.currentImage);
+            }
+        }
+        
+        function startResetHold(e) {
+            e.preventDefault();
+            resetStartTime = Date.now();
+            
+            // Show progress circle
+            resetProgress.classList.add('active');
+            const progressStroke = resetProgress.querySelector('.progress-stroke');
+            progressStroke.classList.add('animating');
+            
+            // Start the hold timer
+            resetHoldTimer = setTimeout(() => {
+                // Actually perform the reset after 1.5 seconds
+                resetAlignment();
+                cancelResetHold();
+            }, 1500);
+        }
+        
+        function cancelResetHold() {
+            if (resetHoldTimer) {
+                clearTimeout(resetHoldTimer);
+                resetHoldTimer = null;
+            }
+            
+            // Hide progress circle and reset animation
+            resetProgress.classList.remove('active');
+            const progressStroke = resetProgress.querySelector('.progress-stroke');
+            progressStroke.classList.remove('animating');
+            
+            // Force reflow to reset the animation
+            progressStroke.style.animation = 'none';
+            progressStroke.offsetHeight; // trigger reflow
+            progressStroke.style.animation = '';
+        }
+        
+        function resetAlignment() {
+            const instance = instances[currentInstanceIndex];
+            const currentImageKey = `image${instance.currentImage}`;
+            
+            // Reset current image alignment
+            instance.alignmentSettings[currentImageKey] = { x: 0, y: 0, scale: 1 };
+            
+            // Redraw
+            showImage(instance.currentImage);
+        }
+        
+        // Dragging functionality
+        dropZone.addEventListener('mousedown', (e) => {
+            if (!ghostMode) return;
+            if (e.target === scaleHandle) return; // Don't drag when clicking scale handle
+            
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            
+            const instance = instances[currentInstanceIndex];
+            const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+            originalX = alignment.x;
+            originalY = alignment.y;
+            
+            e.preventDefault();
+        });
+        
+        // Scaling functionality
+        scaleHandle.addEventListener('mousedown', (e) => {
+            if (!ghostMode) return;
+            
+            isScaling = true;
+            scaleStartX = e.clientX;
+            scaleStartY = e.clientY;
+            
+            const instance = instances[currentInstanceIndex];
+            const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+            originalScale = alignment.scale;
+            
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!ghostMode) return;
+            
+            if (isDragging) {
+                const instance = instances[currentInstanceIndex];
+                const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+                
+                const deltaX = e.clientX - dragStartX;
+                const deltaY = e.clientY - dragStartY;
+                
+                alignment.x = originalX + deltaX;
+                alignment.y = originalY + deltaY;
+                
+                showImage(instance.currentImage);
+            } else if (isScaling) {
+                const instance = instances[currentInstanceIndex];
+                const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
+                
+                // Calculate distance from center
+                const rect = dropZone.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2 + alignment.x;
+                const centerY = rect.top + rect.height / 2 + alignment.y;
+                
+                const startDist = Math.sqrt(Math.pow(scaleStartX - centerX, 2) + Math.pow(scaleStartY - centerY, 2));
+                const currentDist = Math.sqrt(Math.pow(e.clientX - centerX, 2) + Math.pow(e.clientY - centerY, 2));
+                
+                // Calculate new scale (proportional)
+                const scaleFactor = currentDist / startDist;
+                alignment.scale = Math.max(0.1, Math.min(5, originalScale * scaleFactor));
+                
+                showImage(instance.currentImage);
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            isScaling = false;
+        });
+        
+        let originalX = 0;
+        let originalY = 0;
+        
+        // Close modal when clicking outside
+        includedImagesModal.addEventListener('click', (e) => {
+            if (e.target === includedImagesModal) {
+                closeIncludedImagesModal();
+            }
+        });
+        
+        // Close viewer when clicking outside image
+        imageViewerOverlay.addEventListener('click', (e) => {
+            if (e.target === imageViewerOverlay) {
+                closeImageViewer();
+            }
+        });
+        
+        // Keyboard navigation for viewer
+        document.addEventListener('keydown', (e) => {
+            if (imageViewerOverlay.classList.contains('active')) {
+                if (e.key === 'Escape') {
+                    closeImageViewer();
+                } else if (e.key === 'ArrowLeft') {
+                    viewPrevImage();
+                } else if (e.key === 'ArrowRight') {
+                    viewNextImage();
+                }
+            } else if (includedImagesModal.classList.contains('active')) {
+                if (e.key === 'Escape') {
+                    closeIncludedImagesModal();
+                }
+            }
+        });
+
+        function openDrawingEditor(img1, img2) {
+            let combinedCanvas, imageDataUrl, editorTitle;
+            
+            if (img1 && img2) {
+                // Create side-by-side image
+                const maxHeight = Math.max(img1.height, img2.height);
+                const totalWidth = img1.width + img2.width;
+
+                combinedCanvas = document.createElement('canvas');
+                combinedCanvas.width = totalWidth;
+                combinedCanvas.height = maxHeight;
+                const combinedCtx = combinedCanvas.getContext('2d');
+
+                combinedCtx.drawImage(img1, 0, 0);
+                combinedCtx.drawImage(img2, img1.width, 0);
+                
+                editorTitle = `Drawing Editor - ${title.textContent}`;
+            } else {
+                // Single image mode
+                const singleImg = img1 || img2;
+                combinedCanvas = document.createElement('canvas');
+                combinedCanvas.width = singleImg.width;
+                combinedCanvas.height = singleImg.height;
+                const combinedCtx = combinedCanvas.getContext('2d');
+                
+                combinedCtx.drawImage(singleImg, 0, 0);
+                
+                editorTitle = `Drawing Editor - ${title.textContent} (Single Image)`;
+            }
+
+            imageDataUrl = combinedCanvas.toDataURL('image/png');
+            const currentTitle = title.textContent.trim();
+
+            // Create the HTML content as a string to avoid template literal issues
+            const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>${editorTitle}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"><\/script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        .drawing-editor {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f0f4f8;
+        }
+        .drawing-toolbar {
+            background-color: #2c3e50;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .drawing-toolbar button {
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: #fff;
+            border-radius: 5px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .drawing-toolbar button:hover {
+            background-color: #2980b9;
+        }
+        .drawing-toolbar button.active {
+            background-color: #27ae60;
+        }
+        .toolbar-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 0 10px;
+            border-right: 1px solid #34495e;
+        }
+        .toolbar-group:last-child {
+            border-right: none;
+        }
+        .color-picker {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .brush-size {
+            width: 60px;
+            margin: 0 5px;
+        }
+        .drawing-canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ddd;
+            position: relative;
+            overflow: auto;
+        }
+        #fabricCanvas {
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        label {
+            color: #fff;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="drawing-editor">
+        <div class="drawing-toolbar">
+            <div class="toolbar-group">
+                <button id="drawBtn" class="active">Draw</button>
+                <button id="circleBtn">Circle</button>
+                <button id="rectBtn">Rectangle</button>
+                <button id="arrowBtn">Arrow</button>
+                <button id="textBtn">Text</button>
+                <button id="selectBtn">Select</button>
+            </div>
+            <div class="toolbar-group">
+                <label>Color:</label>
+                <input type="color" id="colorPicker" class="color-picker" value="#ff0000">
+                <label>Size:</label>
+                <input type="range" id="brushSize" class="brush-size" min="1" max="50" value="3">
+                <span id="sizeValue" style="color: #fff;">3</span>
+            </div>
+            <div class="toolbar-group">
+                <label>Text Size:</label>
+                <input type="range" id="textSize" class="brush-size" min="10" max="100" value="20">
+                <span id="textSizeValue" style="color: #fff;">20</span>
+            </div>
+            <div class="toolbar-group">
+                <button id="undoBtn">Undo</button>
+                <button id="clearBtn">Clear All</button>
+            </div>
+            <div class="toolbar-group">
+                <label style="color: #fff; display: flex; align-items: center; margin-right: 15px;">
+                    <input type="checkbox" id="includeLabelsCheckbox" checked style="margin-right: 5px;">
+                    Include proof labels
+                </label>
+                <button id="exportBtn" style="background-color: #27ae60;">Export Image</button>
+            </div>
+        </div>
+        <div class="drawing-canvas-container">
+            <canvas id="fabricCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const imageUrl = '${imageDataUrl}';
+            const docTitle = ${JSON.stringify(currentTitle)};
+            const hasImg1 = '${img1 ? "true" : "false"}';
+            const hasImg2 = '${img2 ? "true" : "false"}';
+            const sessionId = '${instances[currentInstanceIndex].sessionId || ""}';
+            const assignedTo = '${instances[currentInstanceIndex].assignedTo || ""}';
+            let fabricCanvas = null;
+            let isDrawing = false;
+            let currentMode = 'draw';
+            let currentColor = '#ff0000';
+            let currentWidth = 3;
+            let currentTextSize = 20;
+            let history = [];
+
+            // Wait for fabric to load
+            function initializeCanvas() {
+                if (typeof fabric === 'undefined') {
+                    setTimeout(initializeCanvas, 100);
+                    return;
+                }
+
+                // Load the image and initialize Fabric canvas
+                const img = new Image();
+                img.onload = function() {
+                    fabricCanvas = new fabric.Canvas('fabricCanvas', {
+                        width: img.width,
+                        height: img.height,
+                        selection: false
+                    });
+
+                    // Add the background image
+                    fabric.Image.fromURL(imageUrl, function(fabricImg) {
+                        fabricCanvas.setBackgroundImage(fabricImg, fabricCanvas.renderAll.bind(fabricCanvas));
+                    });
+
+                    // Set initial drawing mode
+                    setDrawingMode();
+                    setupEventListeners();
+                };
+                img.src = imageUrl;
+            }
+
+            function setActiveButton(btn) {
+                document.querySelectorAll('.drawing-toolbar button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+
+            function setDrawingMode() {
+                if (!fabricCanvas) return;
+                fabricCanvas.isDrawingMode = true;
+                fabricCanvas.freeDrawingBrush.color = currentColor;
+                fabricCanvas.freeDrawingBrush.width = currentWidth;
+                fabricCanvas.selection = false;
+                currentMode = 'draw';
+            }
+
+            function disableDrawingMode() {
+                if (!fabricCanvas) return;
+                fabricCanvas.isDrawingMode = false;
+                fabricCanvas.selection = true;
+            }
+
+            function setupEventListeners() {
+                // Tool buttons
+                const drawBtn = document.getElementById('drawBtn');
+                const circleBtn = document.getElementById('circleBtn');
+                const rectBtn = document.getElementById('rectBtn');
+                const arrowBtn = document.getElementById('arrowBtn');
+                const textBtn = document.getElementById('textBtn');
+                const selectBtn = document.getElementById('selectBtn');
+                const undoBtn = document.getElementById('undoBtn');
+                const clearBtn = document.getElementById('clearBtn');
+                const exportBtn = document.getElementById('exportBtn');
+                const colorPicker = document.getElementById('colorPicker');
+                const brushSize = document.getElementById('brushSize');
+                const sizeValue = document.getElementById('sizeValue');
+                const textSize = document.getElementById('textSize');
+                const textSizeValue = document.getElementById('textSizeValue');
+
+                // Update brush size display
+                brushSize.addEventListener('input', (e) => {
+                    currentWidth = parseInt(e.target.value);
+                    sizeValue.textContent = currentWidth;
+                    if (fabricCanvas && fabricCanvas.isDrawingMode) {
+                        fabricCanvas.freeDrawingBrush.width = currentWidth;
+                    }
+                });
+
+                // Update text size display
+                textSize.addEventListener('input', (e) => {
+                    currentTextSize = parseInt(e.target.value);
+                    textSizeValue.textContent = currentTextSize;
+                });
+
+                // Update color
+                colorPicker.addEventListener('input', (e) => {
+                    currentColor = e.target.value;
+                    if (fabricCanvas && fabricCanvas.isDrawingMode) {
+                        fabricCanvas.freeDrawingBrush.color = currentColor;
+                    }
+                });
+
+                drawBtn.addEventListener('click', () => {
+                    setActiveButton(drawBtn);
+                    setDrawingMode();
+                });
+
+                selectBtn.addEventListener('click', () => {
+                    setActiveButton(selectBtn);
+                    disableDrawingMode();
+                    currentMode = 'select';
+                });
+
+                circleBtn.addEventListener('click', () => {
+                    setActiveButton(circleBtn);
+                    disableDrawingMode();
+                    currentMode = 'circle';
+                });
+
+                rectBtn.addEventListener('click', () => {
+                    setActiveButton(rectBtn);
+                    disableDrawingMode();
+                    currentMode = 'rect';
+                });
+
+                arrowBtn.addEventListener('click', () => {
+                    setActiveButton(arrowBtn);
+                    disableDrawingMode();
+                    currentMode = 'arrow';
+                });
+
+                textBtn.addEventListener('click', () => {
+                    setActiveButton(textBtn);
+                    disableDrawingMode();
+                    currentMode = 'text';
+                });
+
+                // Shape drawing
+                let isDown = false;
+                let startX, startY;
+                let tempShape = null;
+                let isEditingText = false;
+
+                // Track text editing state
+                fabricCanvas.on('text:editing:entered', () => {
+                    isEditingText = true;
+                });
+
+                fabricCanvas.on('text:editing:exited', () => {
+                    isEditingText = false;
+                });
+
+                fabricCanvas.on('mouse:down', (options) => {
+                    if (currentMode === 'select' || currentMode === 'draw') return;
+                    
+                    // Don't start new shapes while editing text
+                    if (isEditingText) return;
+                    
+                    isDown = true;
+                    const pointer = fabricCanvas.getPointer(options.e);
+                    startX = pointer.x;
+                    startY = pointer.y;
+
+                    if (currentMode === 'text') {
+                        // Don't create text on mouse down - wait for drag or up
+                        return;
+                    }
+                });
+
+                fabricCanvas.on('mouse:move', (options) => {
+                    if (!isDown || currentMode === 'select' || currentMode === 'draw' || isEditingText) return;
+
+                    const pointer = fabricCanvas.getPointer(options.e);
+                    
+                    // Remove previous preview shape
+                    if (tempShape) {
+                        fabricCanvas.remove(tempShape);
+                    }
+
+                    if (currentMode === 'text') {
+                        // Show text box preview
+                        tempShape = new fabric.Rect({
+                            left: Math.min(startX, pointer.x),
+                            top: Math.min(startY, pointer.y),
+                            width: Math.abs(pointer.x - startX),
+                            height: Math.abs(pointer.y - startY),
+                            fill: 'rgba(200, 200, 200, 0.3)',
+                            stroke: currentColor,
+                            strokeWidth: 1,
+                            strokeDashArray: [5, 5],
+                            selectable: false,
+                            evented: false
+                        });
+                        fabricCanvas.add(tempShape);
+                    } else if (currentMode === 'circle') {
+                        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2)) / 2;
+                        const centerX = (startX + pointer.x) / 2;
+                        const centerY = (startY + pointer.y) / 2;
+                        
+                        tempShape = new fabric.Circle({
+                            left: centerX - radius,
+                            top: centerY - radius,
+                            radius: radius,
+                            fill: 'transparent',
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            opacity: 0.5,
+                            selectable: false,
+                            evented: false
+                        });
+                        fabricCanvas.add(tempShape);
+                    } else if (currentMode === 'rect') {
+                        tempShape = new fabric.Rect({
+                            left: Math.min(startX, pointer.x),
+                            top: Math.min(startY, pointer.y),
+                            width: Math.abs(pointer.x - startX),
+                            height: Math.abs(pointer.y - startY),
+                            fill: 'transparent',
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            opacity: 0.5,
+                            selectable: false,
+                            evented: false
+                        });
+                        fabricCanvas.add(tempShape);
+                    } else if (currentMode === 'arrow') {
+                        // Create arrow preview
+                        const arrow = new fabric.Line([startX, startY, pointer.x, pointer.y], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: false,
+                            evented: false
+                        });
+                        
+                        // Add arrowhead preview
+                        const angle = Math.atan2(pointer.y - startY, pointer.x - startX);
+                        const headLength = 15;
+                        const headAngle = Math.PI / 6;
+                        
+                        const arrowHead1 = new fabric.Line([
+                            pointer.x,
+                            pointer.y,
+                            pointer.x - headLength * Math.cos(angle - headAngle),
+                            pointer.y - headLength * Math.sin(angle - headAngle)
+                        ], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: false,
+                            evented: false
+                        });
+                        
+                        const arrowHead2 = new fabric.Line([
+                            pointer.x,
+                            pointer.y,
+                            pointer.x - headLength * Math.cos(angle + headAngle),
+                            pointer.y - headLength * Math.sin(angle + headAngle)
+                        ], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: false,
+                            evented: false
+                        });
+                        
+                        tempShape = new fabric.Group([arrow, arrowHead1, arrowHead2], {
+                            selectable: false,
+                            evented: false,
+                            opacity: 0.5
+                        });
+                        
+                        fabricCanvas.add(tempShape);
+                    }
+                    
+                    fabricCanvas.renderAll();
+                });
+
+                fabricCanvas.on('mouse:up', (options) => {
+                    if (!isDown || currentMode === 'select' || currentMode === 'draw' || isEditingText) return;
+
+                    isDown = false;
+                    
+                    // Remove preview shape
+                    if (tempShape) {
+                        fabricCanvas.remove(tempShape);
+                        tempShape = null;
+                    }
+                    
+                    const pointer = fabricCanvas.getPointer(options.e);
+
+                    if (currentMode === 'text') {
+                        const width = Math.abs(pointer.x - startX);
+                        const height = Math.abs(pointer.y - startY);
+                        
+                        // If it's just a click (no drag), use default behavior
+                        if (width < 5 && height < 5) {
+                            const text = prompt('Enter text:');
+                            if (text) {
+                                const fabricText = new fabric.Text(text, {
+                                    left: startX,
+                                    top: startY,
+                                    fontSize: currentTextSize,
+                                    fill: currentColor,
+                                    selectable: true
+                                });
+                                fabricCanvas.add(fabricText);
+                                fabricCanvas.renderAll();
+                                
+                                // Automatically select the text for immediate manipulation
+                                fabricCanvas.setActiveObject(fabricText);
+                                
+                                // Switch to select mode
+                                setActiveButton(selectBtn);
+                                disableDrawingMode();
+                                currentMode = 'select';
+                            }
+                        } else {
+                            // Create a Textbox (editable text) with defined width
+                            const textbox = new fabric.Textbox('', {
+                                left: Math.min(startX, pointer.x),
+                                top: Math.min(startY, pointer.y),
+                                fontSize: currentTextSize,
+                                fill: currentColor,
+                                width: width,
+                                selectable: true,
+                                editable: true,
+                                splitByGrapheme: false,  // Word wrapping instead of character splitting
+                                styles: {},
+                                // Textbox specific properties for wrapping
+                                fixedWidth: true,
+                                fixedHeight: false,
+                                minHeight: currentTextSize * 1.5,
+                                dynamicMinWidth: 2,
+                                // Remove resize controls for width
+                                lockScalingX: true,
+                                lockUniScaling: true
+                            });
+                            
+                            // Set controls visibility after creation
+                            textbox.setControlsVisibility({
+                                mt: false, // middle-top
+                                mb: true,  // middle-bottom
+                                ml: false, // middle-left
+                                mr: false, // middle-right
+                                bl: false, // bottom-left
+                                br: false, // bottom-right
+                                tl: false, // top-left
+                                tr: false, // top-right
+                                mtr: true  // rotation
+                            });
+                            
+                            // Handle editing exit
+                            textbox.on('editing:exited', function() {
+                                // Remove if empty
+                                if (this.text === '') {
+                                    fabricCanvas.remove(this);
+                                } else {
+                                    // Save to history
+                                    history = history.slice(0, historyStep + 1);
+                                    history.push(JSON.stringify(fabricCanvas.toJSON()));
+                                    historyStep = history.length - 1;
+                                }
+                                
+                                // Switch to select mode
+                                setActiveButton(selectBtn);
+                                disableDrawingMode();
+                                currentMode = 'select';
+                                
+                                fabricCanvas.renderAll();
+                            });
+                            
+                            fabricCanvas.add(textbox);
+                            fabricCanvas.renderAll();
+                            
+                            // Set as active and enter editing with a small delay
+                            fabricCanvas.setActiveObject(textbox);
+                            
+                            // Use setTimeout to ensure the canvas has processed the object
+                            setTimeout(() => {
+                                textbox.enterEditing();
+                                textbox.hiddenTextarea.focus();
+                            }, 50);
+                        }
+                    } else if (currentMode === 'circle') {
+                        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2)) / 2;
+                        const centerX = (startX + pointer.x) / 2;
+                        const centerY = (startY + pointer.y) / 2;
+                        
+                        const circle = new fabric.Circle({
+                            left: centerX - radius,
+                            top: centerY - radius,
+                            radius: radius,
+                            fill: 'transparent',
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: true
+                        });
+                        fabricCanvas.add(circle);
+                    } else if (currentMode === 'rect') {
+                        const rect = new fabric.Rect({
+                            left: Math.min(startX, pointer.x),
+                            top: Math.min(startY, pointer.y),
+                            width: Math.abs(pointer.x - startX),
+                            height: Math.abs(pointer.y - startY),
+                            fill: 'transparent',
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: true
+                        });
+                        fabricCanvas.add(rect);
+                    } else if (currentMode === 'arrow') {
+                        const arrow = new fabric.Line([startX, startY, pointer.x, pointer.y], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: true
+                        });
+                        
+                        // Add arrowhead
+                        const angle = Math.atan2(pointer.y - startY, pointer.x - startX);
+                        const headLength = 15;
+                        const headAngle = Math.PI / 6;
+                        
+                        const arrowHead1 = new fabric.Line([
+                            pointer.x,
+                            pointer.y,
+                            pointer.x - headLength * Math.cos(angle - headAngle),
+                            pointer.y - headLength * Math.sin(angle - headAngle)
+                        ], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: true
+                        });
+                        
+                        const arrowHead2 = new fabric.Line([
+                            pointer.x,
+                            pointer.y,
+                            pointer.x - headLength * Math.cos(angle + headAngle),
+                            pointer.y - headLength * Math.sin(angle + headAngle)
+                        ], {
+                            stroke: currentColor,
+                            strokeWidth: currentWidth,
+                            selectable: true
+                        });
+                        
+                        const group = new fabric.Group([arrow, arrowHead1, arrowHead2], {
+                            selectable: true
+                        });
+                        
+                        fabricCanvas.add(group);
+                    }
+                    fabricCanvas.renderAll();
+                });
+
+                // Undo/Redo functionality
+                let historyStep = 0;
+                
+                fabricCanvas.on('path:created', () => {
+                    // Remove any states after current position
+                    history = history.slice(0, historyStep + 1);
+                    history.push(JSON.stringify(fabricCanvas.toJSON()));
+                    historyStep = history.length - 1;
+                });
+                
+                fabricCanvas.on('object:added', () => {
+                    if (!fabricCanvas.isDrawingMode) {
+                        // Remove any states after current position
+                        history = history.slice(0, historyStep + 1);
+                        history.push(JSON.stringify(fabricCanvas.toJSON()));
+                        historyStep = history.length - 1;
+                    }
+                });
+
+                function performUndo() {
+                    if (historyStep > 0) {
+                        historyStep--;
+                        fabricCanvas.loadFromJSON(history[historyStep], () => {
+                            fabricCanvas.renderAll();
+                        });
+                    } else if (historyStep === 0 && history.length > 0) {
+                        fabricCanvas.clear();
+                        // Restore background image
+                        fabric.Image.fromURL(imageUrl, function(fabricImg) {
+                            fabricCanvas.setBackgroundImage(fabricImg, fabricCanvas.renderAll.bind(fabricCanvas));
+                        });
+                        history = [];
+                        historyStep = 0;
+                    }
+                }
+
+                function performRedo() {
+                    if (historyStep < history.length - 1) {
+                        historyStep++;
+                        fabricCanvas.loadFromJSON(history[historyStep], () => {
+                            fabricCanvas.renderAll();
+                        });
+                    }
+                }
+
+                undoBtn.addEventListener('click', performUndo);
+
+                // Add redo button functionality if you add one
+                // redoBtn.addEventListener('click', performRedo);
+
+                clearBtn.addEventListener('click', () => {
+                    if (confirm('Clear all drawings?')) {
+                        fabricCanvas.clear();
+                        // Restore background image
+                        fabric.Image.fromURL(imageUrl, function(fabricImg) {
+                            fabricCanvas.setBackgroundImage(fabricImg, fabricCanvas.renderAll.bind(fabricCanvas));
+                        });
+                        history = [];
+                    }
+                });
+
+                exportBtn.addEventListener('click', () => {
+                    const includeLabels = document.getElementById('includeLabelsCheckbox').checked;
+                    
+                    if (includeLabels) {
+                        // Export with labels
+                        exportWithLabels(fabricCanvas, docTitle);
+                    } else {
+                        // Standard export
+                        const dataURL = fabricCanvas.toDataURL({
+                            format: 'png',
+                            quality: 1
+                        });
+                        
+                        const link = document.createElement('a');
+                        const currentDate = new Date().toISOString().split('T')[0];
+                        
+                        // Clean the title for filename use
+                        const cleanTitle = docTitle
+                            .replace(/\s+/g, '') // Remove all spaces
+                            .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename characters
+                            .replace(/^Image Comparison App - Instance \d+$/i, '') // Remove default title
+                            .trim();
+                        
+                        // Clean the assigned name for filename use
+                        const cleanAssignedTo = assignedTo.replace(/\s+/g, '');
+                        
+                        // Build filename parts
+                        let filenameParts = [];
+                        if (sessionId) filenameParts.push(sessionId);
+                        if (cleanAssignedTo) filenameParts.push(cleanAssignedTo);
+                        if (cleanTitle) filenameParts.push(cleanTitle);
+                        filenameParts.push('proof-compare');
+                        filenameParts.push(currentDate);
+                        
+                        link.download = filenameParts.join('-') + '.png';
+                        link.href = dataURL;
+                        link.click();
+                    }
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    // Check if we're editing text
+                    const activeObject = fabricCanvas.getActiveObject();
+                    const isEditingText = activeObject && activeObject.isEditing;
+                    
+                    // Delete selected object (but not when editing text)
+                    if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) {
+                        if (activeObject) {
+                            fabricCanvas.remove(activeObject);
+                            fabricCanvas.renderAll();
+                        }
+                    }
+                    
+                    // Undo: Ctrl/Cmd + Z (disabled during text editing)
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !isEditingText) {
+                        e.preventDefault();
+                        performUndo();
+                    }
+                    
+                    // Redo: Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y (disabled during text editing)
+                    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) && !isEditingText) {
+                        e.preventDefault();
+                        performRedo();
+                    }
+                });
+            }
+
+            
+            // Function to export canvas with proof labels
+            function exportWithLabels(canvas, title) {
+                // Create a temporary canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Copy the fabric canvas content
+                tempCtx.drawImage(canvas.getElement(), 0, 0);
+                
+                // Determine if side-by-side or single image
+                const img1Exists = hasImg1 === 'true';
+                const img2Exists = hasImg2 === 'true';
+                const isSideBySide = img1Exists && img2Exists;
+                
+                // Calculate text size
+                const textWidth = Math.max(tempCanvas.width * 0.05, 50);
+                const fontSize = Math.max(textWidth * 0.3, 12);
+                
+                // Text styling
+                tempCtx.font = fontSize + 'px Arial';
+                tempCtx.textBaseline = 'bottom';
+                
+                // Determine labels
+                let leftText = '';
+                let rightText = '';
+                
+                if (isSideBySide) {
+                    leftText = 'Supplier Proof';
+                    rightText = 'Kotis Proof';
+                } else {
+                    leftText = img1Exists ? 'Supplier Proof' : 'Kotis Proof';
+                }
+                
+                // Position parameters
+                const margin = 10;
+                const bottomY = tempCanvas.height - margin;
+                
+                // Draw left label
+                if (leftText) {
+                    tempCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    const leftMetrics = tempCtx.measureText(leftText);
+                    const textHeight = fontSize * 1.2;
+                    tempCtx.fillRect(margin, bottomY - textHeight, leftMetrics.width + 10, textHeight);
+                    
+                    tempCtx.fillStyle = 'white';
+                    tempCtx.textAlign = 'left';
+                    tempCtx.fillText(leftText, margin + 5, bottomY - 5);
+                }
+                
+                // Draw right label (only in side-by-side mode)
+                if (isSideBySide && rightText) {
+                    tempCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    const rightMetrics = tempCtx.measureText(rightText);
+                    const textHeight = fontSize * 1.2;
+                    const rightX = tempCanvas.width - margin - rightMetrics.width - 10;
+                    tempCtx.fillRect(rightX, bottomY - textHeight, rightMetrics.width + 10, textHeight);
+                    
+                    tempCtx.fillStyle = 'white';
+                    tempCtx.textAlign = 'left';
+                    tempCtx.fillText(rightText, rightX + 5, bottomY - 5);
+                }
+                
+                // Export the canvas
+                const dataURL = tempCanvas.toDataURL('image/png', 1);
+                const link = document.createElement('a');
+                const currentDate = new Date().toISOString().split('T')[0];
+                
+                // Clean the title for filename use
+                const cleanTitle = title
+                    .replace(/\s+/g, '') // Remove all spaces
+                    .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename characters
+                    .replace(/^Image Comparison App - Instance \d+$/i, '') // Remove default title
+                    .trim();
+                
+                // Clean the assigned name for filename use
+                const cleanAssignedTo = assignedTo.replace(/\s+/g, '');
+                
+                // Build filename parts
+                let filenameParts = [];
+                if (sessionId) filenameParts.push(sessionId);
+                if (cleanAssignedTo) filenameParts.push(cleanAssignedTo);
+                if (cleanTitle) filenameParts.push(cleanTitle);
+                filenameParts.push('proof-compare');
+                filenameParts.push(currentDate);
+                
+                link.download = filenameParts.join('-') + '.png';
+                link.href = dataURL;
+                link.click();
+            }
+            
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeCanvas);
+            } else {
+                initializeCanvas();
+            }
+        })();
+    <\/script>
+</body>
+</html>`;
+
+            // Open new tab with the HTML content
+            const newTab = window.open('', '_blank');
+            newTab.document.write(htmlContent);
+            newTab.document.close();
+        }
+
+        // Session ID and name validation wrapper
+        function validateAndSave() {
+            const sessionIdInput = document.getElementById('sessionId');
+            const assignedToSelect = document.getElementById('assignedTo');
+            const sessionId = sessionIdInput.value.trim();
+            const assignedTo = assignedToSelect.value.trim();
+            
+            // Check for missing session ID
+            if (!sessionId || sessionId.length !== 6 || !/^\d{6}$/.test(sessionId)) {
+                alert('Please enter a 6-digit job number before saving.');
+                sessionIdInput.focus();
+                sessionIdInput.select();
+                return;
+            }
+            
+            // Check for missing assigned name
+            if (!assignedTo) {
+                alert('Please select a name from the dropdown before saving.');
+                assignedToSelect.focus();
+                return;
+            }
+            
+            // If we get here, proceed with save
+            saveSession();
+        }
+
+        // Save session functionality
+        function saveSession() {
+            saveTitle(); // Make sure the current title is saved
+            saveNotes(); // Make sure the current notes are saved
+            
+            // Get Seattle time
+            const seattleTime = new Date().toLocaleString("en-US", {
+                timeZone: "America/Los_Angeles",
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+
+            // Create a deep copy of the instances without the Image objects
+            const sessionData = {
+                exportTimestamp: seattleTime,
+                exportTimezone: "America/Los_Angeles (Seattle, WA)",
+                instances: instances.map(instance => {
+                    return {
+                        image1Name: instance.image1Name,
+                        image2Name: instance.image2Name,
+                        currentImage: instance.currentImage,
+                        title: instance.title,
+                        image1Data: instance.image1Data,
+                        image2Data: instance.image2Data,
+                        notes: instance.notes,
+                        sessionId: instance.sessionId,
+                        assignedTo: instance.assignedTo,
+                        includedImages: instance.includedImages || [],
+                        alignmentSettings: instance.alignmentSettings || {
+                            image1: { x: 0, y: 0, scale: 1 },
+                            image2: { x: 0, y: 0, scale: 1 },
+                            ghostOpacity: 0.6
+                        }
+                    };
+                })
+            };
+            
+            // Create the JSON data
+            const sessionJSON = JSON.stringify(sessionData);
+            
+            // Create and trigger download
+            const blob = new Blob([sessionJSON], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const currentDate = new Date().toISOString().split('T')[0];
+            // Get the session ID and assigned name from the first instance
+            const sessionId = instances[0].sessionId || '';
+            const assignedTo = instances[0].assignedTo || '';
+            
+            // Build filename parts
+            let filenameParts = [];
+            if (sessionId) filenameParts.push(sessionId);
+            if (assignedTo) filenameParts.push(assignedTo.replace(/\s+/g, ''));
+            filenameParts.push('comparison');
+            filenameParts.push(currentDate);
+            
+            link.download = filenameParts.join('-') + '.json';
+            link.href = url;
+            link.click();
+            
+            // Clean up
+            URL.revokeObjectURL(url);
+            
+            // Show status message
+            showStatusMessage('Session saved successfully!');
+        }
+        
+        // Load session functionality
+        function loadSession() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json';
+            
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const sessionData = JSON.parse(event.target.result);
+                        
+                        // Handle both old format (array) and new format (object with instances array)
+                        let instancesData;
+                        if (Array.isArray(sessionData)) {
+                            // Old format - direct array of instances
+                            instancesData = sessionData;
+                        } else if (sessionData.instances && Array.isArray(sessionData.instances)) {
+                            // New format - object with instances array and metadata
+                            instancesData = sessionData.instances;
+                            console.log('Session exported on:', sessionData.exportTimestamp);
+                        } else {
+                            throw new Error('Invalid session file format');
+                        }
+                        
+                        // Load the saved instances
+                        instances = [];
+                        
+                        // Process each instance in the session data
+                        instancesData.forEach((instanceData, index) => {
+                            const newInstance = {
+                                image1: null,
+                                image2: null,
+                                image1Name: instanceData.image1Name,
+                                image2Name: instanceData.image2Name,
+                                currentImage: instanceData.currentImage || 1,
+                                title: instanceData.title || `Image Comparison App - Instance ${index + 1}`,
+                                image1Data: instanceData.image1Data,
+                                image2Data: instanceData.image2Data,
+                                notes: instanceData.notes || '',
+                                sessionId: instanceData.sessionId || '',
+                                assignedTo: instanceData.assignedTo || '',
+                                includedImages: instanceData.includedImages || [],
+                                alignmentSettings: instanceData.alignmentSettings || {
+                                    image1: { x: 0, y: 0, scale: 1 },
+                                    image2: { x: 0, y: 0, scale: 1 },
+                                    ghostOpacity: 0.6
+                                }
+                            };
+                            
+                            // Load image1 if there's data
+                            if (instanceData.image1Data) {
+                                const img1 = new Image();
+                                img1.onload = () => {
+                                    newInstance.image1 = img1;
+                                    if (index === currentInstanceIndex) {
+                                        updateInstanceDisplay();
+                                    }
+                                };
+                                img1.src = instanceData.image1Data;
+                            }
+                            
+                            // Load image2 if there's data
+                            if (instanceData.image2Data) {
+                                const img2 = new Image();
+                                img2.onload = () => {
+                                    newInstance.image2 = img2;
+                                    if (index === currentInstanceIndex) {
+                                        updateInstanceDisplay();
+                                    }
+                                };
+                                img2.src = instanceData.image2Data;
+                            }
+                            
+                            instances.push(newInstance);
+                        });
+                        
+                        // Reset to the first instance
+                        currentInstanceIndex = 0;
+                        updateInstanceDisplay();
+                        
+                        showStatusMessage('Session loaded successfully!');
+                    } catch (error) {
+                        console.error('Error loading session:', error);
+                        alert('Failed to load session file. It may be corrupted or in an invalid format.');
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+        
+        function showStatusMessage(message) {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden');
+            
+            // Hide the message after 3 seconds
+            setTimeout(() => {
+                statusMessage.classList.add('hidden');
+            }, 3000);
+        }
+        
+        // Event listeners for save and load buttons
+        saveButton.addEventListener('click', validateAndSave);
+        loadButton.addEventListener('click', loadSession);
+
+        dropZone.addEventListener('dragover', (e) => e.preventDefault());
+        dropZone.addEventListener('drop', handleDrop);
+        dropZone.addEventListener('click', handleClick);
+        window.addEventListener('resize', resizeCanvas);
+
+        document.getElementById('prevInstance').addEventListener('click', prevInstance);
+        document.getElementById('nextInstance').addEventListener('click', nextInstance);
+    </script>
+</body>
+</html>
