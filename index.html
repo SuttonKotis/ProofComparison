@@ -951,12 +951,20 @@
             image2Label.textContent = instance.image2Name ? `Kotis Proof: ${instance.image2Name}` : 'Kotis Proof: None';
             title.textContent = instance.title || `Image Comparison App - Instance ${currentInstanceIndex + 1}`;
             instanceNotes.value = instance.notes || '';
-            
+
             // Update the session ID field
             document.getElementById('sessionId').value = instance.sessionId || '';
-            
+
             // Update the assigned to field
             document.getElementById('assignedTo').value = instance.assignedTo || '';
+
+            // Show/hide Go button based on session ID
+            const goButton = document.getElementById('goButton');
+            if (instance.sessionId && instance.sessionId.length === 6) {
+                goButton.style.display = 'inline-block';
+            } else {
+                goButton.style.display = 'none';
+            }
 
             if (instance.image1 || instance.image2) {
                 dropText.style.display = 'none';
@@ -965,7 +973,7 @@
                 dropText.style.display = 'block';
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-            
+
             // No need to update display here since images are in modal
         }
         
