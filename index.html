@@ -304,6 +304,10 @@
         .image-label:hover {
             background-color: #d6e0e4;
         }
+        .image-label.ghosted {
+            box-shadow: 0 0 15px 3px #16a085;
+            background-color: #d5f4e6;
+        }
         button {
             padding: 8px 15px;
             background-color: #3498db;
@@ -465,6 +469,16 @@
             margin-left: 5px;
             text-align: center;
         }
+        #goButton {
+            padding: 6px 12px;
+            background-color: #27ae60;
+            font-size: 12px;
+            margin-left: 3px;
+            display: none;
+        }
+        #goButton:hover {
+            background-color: #229954;
+        }
         #assignedTo {
             padding: 8px;
             border: 1px solid #3498db;
@@ -586,6 +600,7 @@
             <button id="loadButton">Load Session</button>
             <button id="includeButton">Include Image</button>
             <input type="text" id="sessionId" placeholder="Enter 6-digit ID" maxlength="6" pattern="\d{6}" title="Please enter a 6-digit number">
+            <button id="goButton">Go</button>
             <select id="assignedTo" name="assignedTo">
                 <option value="" selected>Select Name</option>
                 <option value="Molly Corbett">Molly Corbett</option>
@@ -779,26 +794,35 @@
             canvas.width = dropZone.clientWidth;
             canvas.height = dropZone.clientHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+
             if (ghostMode) {
                 // In ghost mode, draw the non-active image as background
                 const otherImageNumber = imageNumber === 1 ? 2 : 1;
                 const otherImg = otherImageNumber === 1 ? instance.image1 : instance.image2;
-                
+
                 if (otherImg) {
                     // Draw the other image (background) with its alignment settings
                     const otherAlignment = instance.alignmentSettings[`image${otherImageNumber}`];
                     const otherBaseScale = Math.min(canvas.width / otherImg.width, canvas.height / otherImg.height);
                     const otherFinalScale = otherBaseScale * otherAlignment.scale;
-                    
+
                     const otherBaseX = (canvas.width / 2) - (otherImg.width / 2) * otherFinalScale;
                     const otherBaseY = (canvas.height / 2) - (otherImg.height / 2) * otherFinalScale;
                     const otherX = otherBaseX + otherAlignment.x;
                     const otherY = otherBaseY + otherAlignment.y;
-                    
+
                     ctx.drawImage(otherImg, otherX, otherY, otherImg.width * otherFinalScale, otherImg.height * otherFinalScale);
                 }
-                
+
+                // Update ghost label highlighting
+                if (imageNumber === 1) {
+                    image1Label.classList.add('ghosted');
+                    image2Label.classList.remove('ghosted');
+                } else {
+                    image2Label.classList.add('ghosted');
+                    image1Label.classList.remove('ghosted');
+                }
+
                 // Now draw the current image on the ghost canvas (overlay)
                 updateGhostOverlay();
             } else {
@@ -806,15 +830,15 @@
                 const alignment = instance.alignmentSettings[`image${imageNumber}`];
                 const baseScale = Math.min(canvas.width / img.width, canvas.height / img.height);
                 const finalScale = baseScale * alignment.scale;
-                
+
                 const baseX = (canvas.width / 2) - (img.width / 2) * finalScale;
                 const baseY = (canvas.height / 2) - (img.height / 2) * finalScale;
                 const x = baseX + alignment.x;
                 const y = baseY + alignment.y;
-                
+
                 ctx.drawImage(img, x, y, img.width * finalScale, img.height * finalScale);
             }
-            
+
             instance.currentImage = imageNumber;
         }
         
@@ -1161,13 +1185,21 @@
         
         function saveSessionId() {
             const sessionIdInput = document.getElementById('sessionId');
+            const goButton = document.getElementById('goButton');
             const instance = instances[currentInstanceIndex];
-            
+
             // Only allow digits and limit to 6 characters
             sessionIdInput.value = sessionIdInput.value.replace(/\D/g, '').substring(0, 6);
-            
+
             // Save the session ID
             instance.sessionId = sessionIdInput.value;
+
+            // Show/hide Go button based on input
+            if (sessionIdInput.value.length === 6) {
+                goButton.style.display = 'inline-block';
+            } else {
+                goButton.style.display = 'none';
+            }
         }
         
         function saveAssignedTo() {
@@ -1326,13 +1358,22 @@
         function toggleGhostMode() {
             ghostMode = !ghostMode;
             const instance = instances[currentInstanceIndex];
-            
+
             if (ghostMode) {
                 ghostButton.classList.add('active');
                 ghostButton.textContent = 'Unghost';
                 resetAlignmentButton.style.display = 'inline-block';
                 dropZone.classList.add('ghost-mode');
-                
+
+                // Highlight the active image label being ghosted
+                if (instance.currentImage === 1) {
+                    image1Label.classList.add('ghosted');
+                    image2Label.classList.remove('ghosted');
+                } else {
+                    image2Label.classList.add('ghosted');
+                    image1Label.classList.remove('ghosted');
+                }
+
                 // Force a redraw to show ghost overlay immediately
                 showImage(instance.currentImage);
             } else {
@@ -1342,7 +1383,11 @@
                 dropZone.classList.remove('ghost-mode');
                 ghostCanvas.style.display = 'none';
                 scaleHandle.style.display = 'none';
-                
+
+                // Remove ghost highlights
+                image1Label.classList.remove('ghosted');
+                image2Label.classList.remove('ghosted');
+
                 // Redraw without ghost overlay
                 showImage(instance.currentImage);
             }
@@ -2565,6 +2610,15 @@
 
         document.getElementById('prevInstance').addEventListener('click', prevInstance);
         document.getElementById('nextInstance').addEventListener('click', nextInstance);
+
+        // Go button functionality
+        document.getElementById('goButton').addEventListener('click', () => {
+            const sessionId = document.getElementById('sessionId').value;
+            if (sessionId.length === 6) {
+                const url = `https://www.kotisdesign.com/admin/edit_primary_main.asp?job_num=${sessionId}`;
+                window.open(url, '_blank');
+            }
+        });
     </script>
 </body>
 </html>
