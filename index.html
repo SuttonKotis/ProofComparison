@@ -1554,31 +1554,74 @@
 
         function openDrawingEditor(img1, img2) {
             let combinedCanvas, imageDataUrl, editorTitle;
-            
+
+            // Define maximum dimensions for viewport fit
+            const MAX_WIDTH = 2400;
+            const MAX_HEIGHT = 1400;
+            const VIEWPORT_RESERVED_SPACE = 160; // leave room for toolbar + margins
+            const viewportHeight = window.innerHeight || MAX_HEIGHT + VIEWPORT_RESERVED_SPACE;
+            const availableHeight = Math.max(
+                400,
+                Math.min(MAX_HEIGHT, viewportHeight - VIEWPORT_RESERVED_SPACE)
+            );
+
             if (img1 && img2) {
-                // Create side-by-side image
+                // Calculate natural combined dimensions
                 const maxHeight = Math.max(img1.height, img2.height);
-                const totalWidth = img1.width + img2.width;
+                const targetHeight = Math.min(maxHeight, availableHeight);
+
+                // Scale each image so heights match the tallest proof (or clamp to MAX_HEIGHT)
+                const baseScale1 = targetHeight / img1.height;
+                const baseScale2 = targetHeight / img2.height;
+
+                let scaledWidth1 = img1.width * baseScale1;
+                let scaledWidth2 = img2.width * baseScale2;
+                const combinedWidth = scaledWidth1 + scaledWidth2;
+
+                // If the total width is too large, downscale both proofs together
+                const widthFitScale = combinedWidth > MAX_WIDTH ? MAX_WIDTH / combinedWidth : 1;
+                const finalScale1 = baseScale1 * widthFitScale;
+                const finalScale2 = baseScale2 * widthFitScale;
+
+                const finalWidth1 = Math.round(img1.width * finalScale1);
+                const finalWidth2 = Math.round(img2.width * finalScale2);
+                const finalHeight1 = Math.round(img1.height * finalScale1);
+                const finalHeight2 = Math.round(img2.height * finalScale2);
+                const finalCanvasHeight = Math.max(finalHeight1, finalHeight2);
+                const finalCanvasWidth = finalWidth1 + finalWidth2;
 
                 combinedCanvas = document.createElement('canvas');
-                combinedCanvas.width = totalWidth;
-                combinedCanvas.height = maxHeight;
+                combinedCanvas.width = finalCanvasWidth;
+                combinedCanvas.height = finalCanvasHeight;
                 const combinedCtx = combinedCanvas.getContext('2d');
 
-                combinedCtx.drawImage(img1, 0, 0);
-                combinedCtx.drawImage(img2, img1.width, 0);
-                
+                // Draw both images with the same target height, centering if one is shorter
+                const y1 = Math.round((finalCanvasHeight - finalHeight1) / 2);
+                const y2 = Math.round((finalCanvasHeight - finalHeight2) / 2);
+
+                combinedCtx.drawImage(img1, 0, y1, finalWidth1, finalHeight1);
+                combinedCtx.drawImage(img2, finalWidth1, y2, finalWidth2, finalHeight2);
+
                 editorTitle = `Drawing Editor - ${title.textContent}`;
             } else {
                 // Single image mode
                 const singleImg = img1 || img2;
+                const targetHeight = Math.min(singleImg.height, availableHeight);
+                const baseScale = targetHeight / singleImg.height;
+                const widthFitScale = (singleImg.width * baseScale) > MAX_WIDTH
+                    ? MAX_WIDTH / (singleImg.width * baseScale)
+                    : 1;
+                const scale = baseScale * widthFitScale;
+                const scaledWidth = singleImg.width * scale;
+                const scaledHeight = singleImg.height * scale;
+
                 combinedCanvas = document.createElement('canvas');
-                combinedCanvas.width = singleImg.width;
-                combinedCanvas.height = singleImg.height;
+                combinedCanvas.width = scaledWidth;
+                combinedCanvas.height = scaledHeight;
                 const combinedCtx = combinedCanvas.getContext('2d');
-                
-                combinedCtx.drawImage(singleImg, 0, 0);
-                
+
+                combinedCtx.drawImage(singleImg, 0, 0, scaledWidth, scaledHeight);
+
                 editorTitle = `Drawing Editor - ${title.textContent} (Single Image)`;
             }
 
@@ -1659,10 +1702,12 @@
             background-color: #ddd;
             position: relative;
             overflow: auto;
+            padding: 20px;
         }
         #fabricCanvas {
             border: 1px solid #ccc;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            margin-top: 10px;
         }
         label {
             color: #fff;
