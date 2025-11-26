@@ -526,7 +526,42 @@
         .hidden {
             opacity: 0;
         }
-        
+
+        /* Loading indicator */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .loading-overlay.active {
+            display: flex;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #ecf0f1;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            margin-top: 15px;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
         /* Drawing Editor Styles */
         .drawing-editor {
             display: flex;
@@ -603,14 +638,18 @@
             <button id="goButton">Go</button>
             <select id="assignedTo" name="assignedTo">
                 <option value="" selected>Select Name</option>
-                <option value="Molly Corbett">Molly Corbett</option>
-                <option value="Karissa Krouse">Karissa Krouse</option>
-                <option value="JL Diaz">JL Diaz</option>
-                <option value="Rafh Pangan">Rafh Pangan</option>
-                <option value="Hannah Ellertson">Hannah Ellertson</option>
                 <option value="Ash Pasion">Ash Pasion</option>
+                <option value="Chris Bosak">Chris Bosak</option>
+                <option value="Chris Lindhartsen">Chris Lindhartsen</option>
+                <option value="Frances Qiu">Frances Qiu</option>
                 <option value="Geri Willis">Geri Willis</option>
+                <option value="Hannah Ellertson">Hannah Ellertson</option>
+                <option value="JL Diaz">JL Diaz</option>
                 <option value="Kayla DePalma">Kayla DePalma</option>
+                <option value="Lennard Manansala">Lennard Manansala</option>
+                <option value="Molly Corbett">Molly Corbett</option>
+                <option value="Nona Calingasan">Nona Calingasan</option>
+                <option value="Rafh Pangan">Rafh Pangan</option>
                 <option value="Recie Baker">Recie Baker</option>
                 <option value="Taylor Sutton">Taylor Sutton</option>
             </select>
@@ -626,10 +665,14 @@
             <canvas id="ghostCanvas"></canvas>
             <div class="scale-handle" id="scaleHandle"></div>
             <div id="dropText">Drop images here or click to select</div>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-spinner"></div>
+                <div class="loading-text" id="loadingText">Loading...</div>
+            </div>
         </div>
         <div id="imageInfo">
             <div id="image1Label" class="image-label">Supplier Proof: None</div>
-            <button id="ghostButton">Ghost</button>
+            <button id="ghostButton">Overlay</button>
             <button id="resetAlignmentButton">
                 Reset
                 <div class="reset-progress" id="resetProgress">
@@ -688,8 +731,20 @@
         const modalBody = document.getElementById('modalBody');
         const modalDropZone = document.getElementById('modalDropZone');
         const imageViewerOverlay = document.getElementById('imageViewerOverlay');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
         let currentViewingIndex = 0;
-        
+
+        // Loading indicator functions
+        function showLoading(message = 'Loading...') {
+            loadingText.textContent = message;
+            loadingOverlay.classList.add('active');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.remove('active');
+        }
+
         // Ghost mode elements and variables
         const ghostCanvas = document.getElementById('ghostCanvas');
         const ghostCtx = ghostCanvas.getContext('2d');
@@ -750,18 +805,44 @@
 
         function loadImages(files) {
             if (files.length > 2) {
-                alert('Please select only two images.');
+                showStatusMessage('Please select only two images.', 'error');
                 return;
             }
 
+            if (files.length === 0) return;
+
+            showLoading('Loading images...');
             const instance = instances[currentInstanceIndex];
+            let loadedCount = 0;
+
+            // Determine target slots for files
+            // For single file: use current side, or first empty slot, or default to slot 1
+            // For two files: first goes to slot 1, second to slot 2
+            function getTargetSlot(fileIndex) {
+                if (files.length === 2) {
+                    return fileIndex === 0 ? 1 : 2;
+                }
+                // Single file logic
+                // Priority: current side if empty, then any empty slot, then current side (overwrite)
+                const currentSide = instance.currentImage || 1;
+                const slot1Empty = !instance.image1;
+                const slot2Empty = !instance.image2;
+
+                if (currentSide === 1 && slot1Empty) return 1;
+                if (currentSide === 2 && slot2Empty) return 2;
+                if (slot1Empty) return 1;
+                if (slot2Empty) return 2;
+                // Both slots filled - use current side to overwrite
+                return currentSide;
+            }
 
             files.forEach((file, index) => {
+                const targetSlot = getTargetSlot(index);
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
-                        if (index === 0) {
+                        if (targetSlot === 1) {
                             instance.image1 = img;
                             instance.image1Name = file.name;
                             instance.image1Data = e.target.result;
@@ -772,12 +853,17 @@
                             instance.image2Data = e.target.result;
                             image2Label.textContent = `Kotis Proof: ${file.name}`;
                         }
-                        if (instance.image1 && instance.image2) {
-                            dropText.style.display = 'none';
-                            showImage(1);
-                        } else if (instance.image1 || instance.image2) {
-                            dropText.style.display = 'none';
-                            showImage(instance.currentImage);
+
+                        loadedCount++;
+                        if (loadedCount === files.length) {
+                            hideLoading();
+                            if (instance.image1 && instance.image2) {
+                                dropText.style.display = 'none';
+                                showImage(1);
+                            } else if (instance.image1 || instance.image2) {
+                                dropText.style.display = 'none';
+                                showImage(targetSlot);
+                            }
                         }
                     };
                     img.src = e.target.result;
@@ -885,12 +971,12 @@
             const baseScale = Math.min(canvas.width / currentImg.width, canvas.height / currentImg.height);
             const finalScale = baseScale * alignment.scale;
             
-            // Position handle at center of the image
+            // Position handle at center of the image (relative to dropZone)
             const centerX = (canvas.width / 2) + alignment.x;
             const centerY = (canvas.height / 2) + alignment.y;
-            
-            scaleHandle.style.left = (dropZone.offsetLeft + centerX - 15) + 'px';
-            scaleHandle.style.top = (dropZone.offsetTop + centerY - 15) + 'px';
+
+            scaleHandle.style.left = (centerX - 15) + 'px';
+            scaleHandle.style.top = (centerY - 15) + 'px';
             scaleHandle.style.display = ghostMode ? 'block' : 'none';
         }
 
@@ -1223,7 +1309,34 @@
         document.getElementById('assignedTo').addEventListener('change', saveAssignedTo);
 
         document.addEventListener('keydown', (e) => {
+            // Check if focus is in a form field or contenteditable element
+            const activeElement = document.activeElement;
+            const isInFormField = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT' ||
+                activeElement.isContentEditable
+            );
+
+            // Check if a modal or overlay is open
+            const isModalOpen = includedImagesModal.classList.contains('active') ||
+                               imageViewerOverlay.classList.contains('active');
+
             if (e.metaKey || e.ctrlKey) {
+                // CMD or CTRL + S to save (allow even in form fields)
+                if (e.key === 's') {
+                    e.preventDefault();
+                    validateAndSave();
+                }
+                // CMD or CTRL + O to load (allow even in form fields)
+                if (e.key === 'o') {
+                    e.preventDefault();
+                    loadSession();
+                }
+
+                // Skip instance switching shortcuts if in form field or modal
+                if (isInFormField || isModalOpen) return;
+
                 // CMD or CTRL + Arrow keys to switch instances
                 if (e.key === 'ArrowLeft') {
                     e.preventDefault();
@@ -1233,17 +1346,10 @@
                     e.preventDefault();
                     nextInstance();
                 }
-                // CMD or CTRL + S to save
-                if (e.key === 's') {
-                    e.preventDefault();
-                    saveSession();
-                }
-                // CMD or CTRL + O to load
-                if (e.key === 'o') {
-                    e.preventDefault();
-                    loadSession();
-                }
             } else {
+                // Skip image switching shortcuts if in form field or modal
+                if (isInFormField || isModalOpen) return;
+
                 // Arrow keys to switch images
                 if (e.key === 'ArrowLeft') {
                     e.preventDefault();
@@ -1349,7 +1455,7 @@
             if (instance.image1 || instance.image2) {
                 openDrawingEditor(instance.image1, instance.image2);
             } else {
-                alert('Please load at least one image.');
+                showStatusMessage('Please load at least one image.', 'error');
             }
         });
         
@@ -1369,7 +1475,7 @@
 
             if (ghostMode) {
                 ghostButton.classList.add('active');
-                ghostButton.textContent = 'Unghost';
+                ghostButton.textContent = 'Hide Overlay';
                 resetAlignmentButton.style.display = 'inline-block';
                 dropZone.classList.add('ghost-mode');
 
@@ -1386,7 +1492,7 @@
                 showImage(instance.currentImage);
             } else {
                 ghostButton.classList.remove('active');
-                ghostButton.textContent = 'Ghost';
+                ghostButton.textContent = 'Overlay';
                 resetAlignmentButton.style.display = 'none';
                 dropZone.classList.remove('ghost-mode');
                 ghostCanvas.style.display = 'none';
@@ -1698,17 +1804,29 @@
             flex: 1;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             background-color: #ddd;
             position: relative;
             overflow: auto;
             padding: 20px;
+            box-sizing: border-box;
+        }
+        .canvas-wrapper {
+            position: relative;
+            line-height: 0;
         }
         #fabricCanvas {
             border: 1px solid #ccc;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            margin-top: 10px;
+            display: block;
         }
+        /* Tool cursors */
+        .cursor-draw { cursor: crosshair; }
+        .cursor-circle { cursor: crosshair; }
+        .cursor-rect { cursor: crosshair; }
+        .cursor-arrow { cursor: crosshair; }
+        .cursor-text { cursor: text; }
+        .cursor-select { cursor: default; }
         label {
             color: #fff;
             font-size: 14px;
@@ -1729,7 +1847,7 @@
             <div class="toolbar-group">
                 <label>Color:</label>
                 <input type="color" id="colorPicker" class="color-picker" value="#ff0000">
-                <label>Size:</label>
+                <label>Stroke:</label>
                 <input type="range" id="brushSize" class="brush-size" min="1" max="50" value="3">
                 <span id="sizeValue" style="color: #fff;">3</span>
             </div>
@@ -1744,14 +1862,20 @@
             </div>
             <div class="toolbar-group">
                 <label style="color: #fff; display: flex; align-items: center; margin-right: 15px;">
-                    <input type="checkbox" id="includeLabelsCheckbox" checked style="margin-right: 5px;">
-                    Include proof labels
+                    <span style="margin-right: 8px;">Label Style:</span>
+                    <select id="labelStyleDropdown" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background-color: #fff; color: #000;">
+                        <option value="none">No labels</option>
+                        <option value="supplier-kotis" selected>Supplier Proof and Kotis Proof</option>
+                        <option value="final-kotis">Final File and Kotis Proof</option>
+                    </select>
                 </label>
                 <button id="exportBtn" style="background-color: #27ae60;">Export Image</button>
             </div>
         </div>
         <div class="drawing-canvas-container">
-            <canvas id="fabricCanvas"></canvas>
+            <div class="canvas-wrapper">
+                <canvas id="fabricCanvas"></canvas>
+            </div>
         </div>
     </div>
 
@@ -1804,6 +1928,11 @@
                 btn.classList.add('active');
             }
 
+            function setCursorForMode(mode) {
+                const wrapper = document.querySelector('.canvas-wrapper');
+                wrapper.className = 'canvas-wrapper cursor-' + mode;
+            }
+
             function setDrawingMode() {
                 if (!fabricCanvas) return;
                 fabricCanvas.isDrawingMode = true;
@@ -1811,6 +1940,7 @@
                 fabricCanvas.freeDrawingBrush.width = currentWidth;
                 fabricCanvas.selection = false;
                 currentMode = 'draw';
+                setCursorForMode('draw');
             }
 
             function disableDrawingMode() {
@@ -1868,30 +1998,35 @@
                     setActiveButton(selectBtn);
                     disableDrawingMode();
                     currentMode = 'select';
+                    setCursorForMode('select');
                 });
 
                 circleBtn.addEventListener('click', () => {
                     setActiveButton(circleBtn);
                     disableDrawingMode();
                     currentMode = 'circle';
+                    setCursorForMode('circle');
                 });
 
                 rectBtn.addEventListener('click', () => {
                     setActiveButton(rectBtn);
                     disableDrawingMode();
                     currentMode = 'rect';
+                    setCursorForMode('rect');
                 });
 
                 arrowBtn.addEventListener('click', () => {
                     setActiveButton(arrowBtn);
                     disableDrawingMode();
                     currentMode = 'arrow';
+                    setCursorForMode('arrow');
                 });
 
                 textBtn.addEventListener('click', () => {
                     setActiveButton(textBtn);
                     disableDrawingMode();
                     currentMode = 'text';
+                    setCursorForMode('text');
                 });
 
                 // Shape drawing
@@ -1899,6 +2034,13 @@
                 let startX, startY;
                 let tempShape = null;
                 let isEditingText = false;
+                let isAddingPreview = false; // Flag to prevent preview shapes from being added to history
+                const MIN_SHAPE_SIZE = 5; // Minimum size threshold for shapes
+
+                // Helper function to calculate scaled arrowhead size
+                function getArrowHeadLength(strokeWidth) {
+                    return Math.max(10, strokeWidth * 4);
+                }
 
                 // Track text editing state
                 fabricCanvas.on('text:editing:entered', () => {
@@ -1909,12 +2051,29 @@
                     isEditingText = false;
                 });
 
+                // Cancel shape drawing with Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && isDown) {
+                        isDown = false;
+                        if (tempShape) {
+                            isAddingPreview = true;
+                            fabricCanvas.remove(tempShape);
+                            isAddingPreview = false;
+                            tempShape = null;
+                        }
+                        fabricCanvas.renderAll();
+                    }
+                });
+
                 fabricCanvas.on('mouse:down', (options) => {
                     if (currentMode === 'select' || currentMode === 'draw') return;
-                    
+
                     // Don't start new shapes while editing text
                     if (isEditingText) return;
-                    
+
+                    // Don't start new shapes if clicking on an existing object (for moving/resizing)
+                    if (options.target) return;
+
                     isDown = true;
                     const pointer = fabricCanvas.getPointer(options.e);
                     startX = pointer.x;
@@ -1930,11 +2089,15 @@
                     if (!isDown || currentMode === 'select' || currentMode === 'draw' || isEditingText) return;
 
                     const pointer = fabricCanvas.getPointer(options.e);
-                    
+
                     // Remove previous preview shape
                     if (tempShape) {
+                        isAddingPreview = true;
                         fabricCanvas.remove(tempShape);
+                        isAddingPreview = false;
                     }
+
+                    isAddingPreview = true; // Mark that we're adding a preview
 
                     if (currentMode === 'text') {
                         // Show text box preview
@@ -1952,13 +2115,12 @@
                         });
                         fabricCanvas.add(tempShape);
                     } else if (currentMode === 'circle') {
-                        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2)) / 2;
-                        const centerX = (startX + pointer.x) / 2;
-                        const centerY = (startY + pointer.y) / 2;
-                        
+                        // Circle: click = center, drag = radius (intuitive behavior)
+                        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2));
+
                         tempShape = new fabric.Circle({
-                            left: centerX - radius,
-                            top: centerY - radius,
+                            left: startX - radius,
+                            top: startY - radius,
                             radius: radius,
                             fill: 'transparent',
                             stroke: currentColor,
@@ -1983,52 +2145,53 @@
                         });
                         fabricCanvas.add(tempShape);
                     } else if (currentMode === 'arrow') {
-                        // Create arrow preview
+                        // Arrow: arrowhead at START (where you click), pointing toward where you drag
                         const arrow = new fabric.Line([startX, startY, pointer.x, pointer.y], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: false,
                             evented: false
                         });
-                        
-                        // Add arrowhead preview
+
+                        // Arrowhead at start point, pointing in the direction of the line
                         const angle = Math.atan2(pointer.y - startY, pointer.x - startX);
-                        const headLength = 15;
+                        const headLength = getArrowHeadLength(currentWidth);
                         const headAngle = Math.PI / 6;
-                        
+
                         const arrowHead1 = new fabric.Line([
-                            pointer.x,
-                            pointer.y,
-                            pointer.x - headLength * Math.cos(angle - headAngle),
-                            pointer.y - headLength * Math.sin(angle - headAngle)
+                            startX,
+                            startY,
+                            startX + headLength * Math.cos(angle - headAngle),
+                            startY + headLength * Math.sin(angle - headAngle)
                         ], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: false,
                             evented: false
                         });
-                        
+
                         const arrowHead2 = new fabric.Line([
-                            pointer.x,
-                            pointer.y,
-                            pointer.x - headLength * Math.cos(angle + headAngle),
-                            pointer.y - headLength * Math.sin(angle + headAngle)
+                            startX,
+                            startY,
+                            startX + headLength * Math.cos(angle + headAngle),
+                            startY + headLength * Math.sin(angle + headAngle)
                         ], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: false,
                             evented: false
                         });
-                        
+
                         tempShape = new fabric.Group([arrow, arrowHead1, arrowHead2], {
                             selectable: false,
                             evented: false,
                             opacity: 0.5
                         });
-                        
+
                         fabricCanvas.add(tempShape);
                     }
-                    
+
+                    isAddingPreview = false; // Done adding preview
                     fabricCanvas.renderAll();
                 });
 
@@ -2036,116 +2199,72 @@
                     if (!isDown || currentMode === 'select' || currentMode === 'draw' || isEditingText) return;
 
                     isDown = false;
-                    
+
                     // Remove preview shape
                     if (tempShape) {
+                        isAddingPreview = true;
                         fabricCanvas.remove(tempShape);
+                        isAddingPreview = false;
                         tempShape = null;
                     }
-                    
+
                     const pointer = fabricCanvas.getPointer(options.e);
+                    const dragWidth = Math.abs(pointer.x - startX);
+                    const dragHeight = Math.abs(pointer.y - startY);
+                    const dragDistance = Math.sqrt(dragWidth * dragWidth + dragHeight * dragHeight);
 
                     if (currentMode === 'text') {
-                        const width = Math.abs(pointer.x - startX);
-                        const height = Math.abs(pointer.y - startY);
-                        
-                        // If it's just a click (no drag), use default behavior
-                        if (width < 5 && height < 5) {
-                            const text = prompt('Enter text:');
-                            if (text) {
-                                const fabricText = new fabric.Text(text, {
-                                    left: startX,
-                                    top: startY,
-                                    fontSize: currentTextSize,
-                                    fill: currentColor,
-                                    selectable: true
-                                });
-                                fabricCanvas.add(fabricText);
-                                fabricCanvas.renderAll();
-                                
-                                // Automatically select the text for immediate manipulation
-                                fabricCanvas.setActiveObject(fabricText);
-                                
-                                // Switch to select mode
-                                setActiveButton(selectBtn);
-                                disableDrawingMode();
-                                currentMode = 'select';
+                        // Both click and drag create inline editable textbox
+                        const isClick = dragWidth < MIN_SHAPE_SIZE && dragHeight < MIN_SHAPE_SIZE;
+                        const textboxWidth = isClick ? 200 : dragWidth; // Default width for click
+
+                        const textbox = new fabric.Textbox('', {
+                            left: isClick ? startX : Math.min(startX, pointer.x),
+                            top: isClick ? startY : Math.min(startY, pointer.y),
+                            fontSize: currentTextSize,
+                            fill: currentColor,
+                            width: textboxWidth,
+                            selectable: true,
+                            editable: true,
+                            splitByGrapheme: false
+                        });
+
+                        // Handle editing exit - remove if empty, stay in text mode
+                        textbox.on('editing:exited', function() {
+                            if (this.text === '') {
+                                fabricCanvas.remove(this);
                             }
-                        } else {
-                            // Create a Textbox (editable text) with defined width
-                            const textbox = new fabric.Textbox('', {
-                                left: Math.min(startX, pointer.x),
-                                top: Math.min(startY, pointer.y),
-                                fontSize: currentTextSize,
-                                fill: currentColor,
-                                width: width,
-                                selectable: true,
-                                editable: true,
-                                splitByGrapheme: false,  // Word wrapping instead of character splitting
-                                styles: {},
-                                // Textbox specific properties for wrapping
-                                fixedWidth: true,
-                                fixedHeight: false,
-                                minHeight: currentTextSize * 1.5,
-                                dynamicMinWidth: 2,
-                                // Remove resize controls for width
-                                lockScalingX: true,
-                                lockUniScaling: true
-                            });
-                            
-                            // Set controls visibility after creation
-                            textbox.setControlsVisibility({
-                                mt: false, // middle-top
-                                mb: true,  // middle-bottom
-                                ml: false, // middle-left
-                                mr: false, // middle-right
-                                bl: false, // bottom-left
-                                br: false, // bottom-right
-                                tl: false, // top-left
-                                tr: false, // top-right
-                                mtr: true  // rotation
-                            });
-                            
-                            // Handle editing exit
-                            textbox.on('editing:exited', function() {
-                                // Remove if empty
-                                if (this.text === '') {
-                                    fabricCanvas.remove(this);
-                                } else {
-                                    // Save to history
-                                    history = history.slice(0, historyStep + 1);
-                                    history.push(JSON.stringify(fabricCanvas.toJSON()));
-                                    historyStep = history.length - 1;
-                                }
-                                
-                                // Switch to select mode
-                                setActiveButton(selectBtn);
-                                disableDrawingMode();
-                                currentMode = 'select';
-                                
-                                fabricCanvas.renderAll();
-                            });
-                            
-                            fabricCanvas.add(textbox);
                             fabricCanvas.renderAll();
-                            
-                            // Set as active and enter editing with a small delay
-                            fabricCanvas.setActiveObject(textbox);
-                            
-                            // Use setTimeout to ensure the canvas has processed the object
-                            setTimeout(() => {
-                                textbox.enterEditing();
+                        });
+
+                        fabricCanvas.add(textbox);
+                        fabricCanvas.setActiveObject(textbox);
+                        fabricCanvas.renderAll();
+
+                        // Enter editing mode
+                        setTimeout(() => {
+                            textbox.enterEditing();
+                            if (textbox.hiddenTextarea) {
                                 textbox.hiddenTextarea.focus();
-                            }, 50);
-                        }
-                    } else if (currentMode === 'circle') {
-                        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2)) / 2;
-                        const centerX = (startX + pointer.x) / 2;
-                        const centerY = (startY + pointer.y) / 2;
-                        
+                            }
+                        }, 50);
+
+                        // Stay in text mode for adding more text (UX #10)
+                        return;
+                    }
+
+                    // Check minimum size for shapes (UX #15)
+                    if (currentMode === 'circle' && dragDistance < MIN_SHAPE_SIZE) return;
+                    if (currentMode === 'rect' && (dragWidth < MIN_SHAPE_SIZE || dragHeight < MIN_SHAPE_SIZE)) return;
+                    if (currentMode === 'arrow' && dragDistance < MIN_SHAPE_SIZE) return;
+
+                    if (currentMode === 'circle') {
+                        // Circle: click = center, drag = radius (UX #11)
+                        const radius = dragDistance;
+
                         const circle = new fabric.Circle({
-                            left: centerX - radius,
-                            top: centerY - radius,
+                            left: startX - radius,
+                            top: startY - radius,
                             radius: radius,
                             fill: 'transparent',
                             stroke: currentColor,
@@ -2157,8 +2276,8 @@
                         const rect = new fabric.Rect({
                             left: Math.min(startX, pointer.x),
                             top: Math.min(startY, pointer.y),
-                            width: Math.abs(pointer.x - startX),
-                            height: Math.abs(pointer.y - startY),
+                            width: dragWidth,
+                            height: dragHeight,
                             fill: 'transparent',
                             stroke: currentColor,
                             strokeWidth: currentWidth,
@@ -2166,64 +2285,73 @@
                         });
                         fabricCanvas.add(rect);
                     } else if (currentMode === 'arrow') {
+                        // Arrow: arrowhead at START, pointing toward drag direction (UX #6, #12)
                         const arrow = new fabric.Line([startX, startY, pointer.x, pointer.y], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: true
                         });
-                        
-                        // Add arrowhead
+
                         const angle = Math.atan2(pointer.y - startY, pointer.x - startX);
-                        const headLength = 15;
+                        const headLength = getArrowHeadLength(currentWidth);
                         const headAngle = Math.PI / 6;
-                        
+
                         const arrowHead1 = new fabric.Line([
-                            pointer.x,
-                            pointer.y,
-                            pointer.x - headLength * Math.cos(angle - headAngle),
-                            pointer.y - headLength * Math.sin(angle - headAngle)
+                            startX,
+                            startY,
+                            startX + headLength * Math.cos(angle - headAngle),
+                            startY + headLength * Math.sin(angle - headAngle)
                         ], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: true
                         });
-                        
+
                         const arrowHead2 = new fabric.Line([
-                            pointer.x,
-                            pointer.y,
-                            pointer.x - headLength * Math.cos(angle + headAngle),
-                            pointer.y - headLength * Math.sin(angle + headAngle)
+                            startX,
+                            startY,
+                            startX + headLength * Math.cos(angle + headAngle),
+                            startY + headLength * Math.sin(angle + headAngle)
                         ], {
                             stroke: currentColor,
                             strokeWidth: currentWidth,
                             selectable: true
                         });
-                        
+
                         const group = new fabric.Group([arrow, arrowHead1, arrowHead2], {
                             selectable: true
                         });
-                        
+
                         fabricCanvas.add(group);
                     }
                     fabricCanvas.renderAll();
                 });
 
                 // Undo/Redo functionality
-                let historyStep = 0;
-                
-                fabricCanvas.on('path:created', () => {
-                    // Remove any states after current position
+                let historyStep = -1; // Start at -1 (no history yet)
+                const MAX_HISTORY = 50; // Limit history size
+
+                function saveToHistory() {
+                    // Don't save preview shapes to history (bug #7 fix)
+                    if (isAddingPreview) return;
+
+                    // Remove any states after current position (for redo after undo)
                     history = history.slice(0, historyStep + 1);
                     history.push(JSON.stringify(fabricCanvas.toJSON()));
                     historyStep = history.length - 1;
-                });
-                
+
+                    // Limit history size
+                    if (history.length > MAX_HISTORY) {
+                        history.shift();
+                        historyStep--;
+                    }
+                }
+
+                fabricCanvas.on('path:created', saveToHistory);
+
                 fabricCanvas.on('object:added', () => {
                     if (!fabricCanvas.isDrawingMode) {
-                        // Remove any states after current position
-                        history = history.slice(0, historyStep + 1);
-                        history.push(JSON.stringify(fabricCanvas.toJSON()));
-                        historyStep = history.length - 1;
+                        saveToHistory();
                     }
                 });
 
@@ -2233,14 +2361,13 @@
                         fabricCanvas.loadFromJSON(history[historyStep], () => {
                             fabricCanvas.renderAll();
                         });
-                    } else if (historyStep === 0 && history.length > 0) {
+                    } else if (historyStep === 0) {
+                        // Undo to blank state but keep history for redo (bug #8 fix)
+                        historyStep = -1;
                         fabricCanvas.clear();
-                        // Restore background image
                         fabric.Image.fromURL(imageUrl, function(fabricImg) {
                             fabricCanvas.setBackgroundImage(fabricImg, fabricCanvas.renderAll.bind(fabricCanvas));
                         });
-                        history = [];
-                        historyStep = 0;
                     }
                 }
 
@@ -2255,46 +2382,59 @@
 
                 undoBtn.addEventListener('click', performUndo);
 
-                // Add redo button functionality if you add one
-                // redoBtn.addEventListener('click', performRedo);
+                // Keyboard shortcuts for undo/redo
+                document.addEventListener('keydown', (e) => {
+                    const activeObject = fabricCanvas.getActiveObject();
+                    const isEditingText = activeObject && activeObject.isEditing;
+                    if (isEditingText) return;
+
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                        e.preventDefault();
+                        performUndo();
+                    }
+                    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                        e.preventDefault();
+                        performRedo();
+                    }
+                });
 
                 clearBtn.addEventListener('click', () => {
                     if (confirm('Clear all drawings?')) {
                         fabricCanvas.clear();
-                        // Restore background image
                         fabric.Image.fromURL(imageUrl, function(fabricImg) {
                             fabricCanvas.setBackgroundImage(fabricImg, fabricCanvas.renderAll.bind(fabricCanvas));
                         });
                         history = [];
+                        historyStep = -1;
                     }
                 });
 
                 exportBtn.addEventListener('click', () => {
-                    const includeLabels = document.getElementById('includeLabelsCheckbox').checked;
-                    
-                    if (includeLabels) {
+                    const labelStyle = document.getElementById('labelStyleDropdown').value;
+
+                    if (labelStyle !== 'none') {
                         // Export with labels
-                        exportWithLabels(fabricCanvas, docTitle);
+                        exportWithLabels(fabricCanvas, docTitle, labelStyle);
                     } else {
-                        // Standard export
+                        // Standard export (no labels)
                         const dataURL = fabricCanvas.toDataURL({
                             format: 'png',
                             quality: 1
                         });
-                        
+
                         const link = document.createElement('a');
                         const currentDate = new Date().toISOString().split('T')[0];
-                        
+
                         // Clean the title for filename use
                         const cleanTitle = docTitle
                             .replace(/\s+/g, '') // Remove all spaces
                             .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename characters
                             .replace(/^Image Comparison App - Instance \d+$/i, '') // Remove default title
                             .trim();
-                        
+
                         // Clean the assigned name for filename use
                         const cleanAssignedTo = assignedTo.replace(/\s+/g, '');
-                        
+
                         // Build filename parts
                         let filenameParts = [];
                         if (sessionId) filenameParts.push(sessionId);
@@ -2302,7 +2442,7 @@
                         if (cleanTitle) filenameParts.push(cleanTitle);
                         filenameParts.push('proof-compare');
                         filenameParts.push(currentDate);
-                        
+
                         link.download = filenameParts.join('-') + '.png';
                         link.href = dataURL;
                         link.click();
@@ -2337,40 +2477,49 @@
                 });
             }
 
-            
+
             // Function to export canvas with proof labels
-            function exportWithLabels(canvas, title) {
+            function exportWithLabels(canvas, title, labelStyle) {
                 // Create a temporary canvas
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 const tempCtx = tempCanvas.getContext('2d');
-                
+
                 // Copy the fabric canvas content
                 tempCtx.drawImage(canvas.getElement(), 0, 0);
-                
+
                 // Determine if side-by-side or single image
                 const img1Exists = hasImg1 === 'true';
                 const img2Exists = hasImg2 === 'true';
                 const isSideBySide = img1Exists && img2Exists;
-                
+
                 // Calculate text size
                 const textWidth = Math.max(tempCanvas.width * 0.05, 50);
                 const fontSize = Math.max(textWidth * 0.3, 12);
-                
+
                 // Text styling
                 tempCtx.font = fontSize + 'px Arial';
                 tempCtx.textBaseline = 'bottom';
-                
-                // Determine labels
+
+                // Determine labels based on labelStyle
                 let leftText = '';
                 let rightText = '';
-                
-                if (isSideBySide) {
-                    leftText = 'Supplier Proof';
-                    rightText = 'Kotis Proof';
-                } else {
-                    leftText = img1Exists ? 'Supplier Proof' : 'Kotis Proof';
+
+                if (labelStyle === 'supplier-kotis') {
+                    if (isSideBySide) {
+                        leftText = 'Supplier Proof';
+                        rightText = 'Kotis Proof';
+                    } else {
+                        leftText = img1Exists ? 'Supplier Proof' : 'Kotis Proof';
+                    }
+                } else if (labelStyle === 'final-kotis') {
+                    if (isSideBySide) {
+                        leftText = 'Final File';
+                        rightText = 'Kotis Proof';
+                    } else {
+                        leftText = img1Exists ? 'Final File' : 'Kotis Proof';
+                    }
                 }
                 
                 // Position parameters
@@ -2456,7 +2605,7 @@
             
             // Check for missing session ID
             if (!sessionId || sessionId.length !== 6 || !/^\d{6}$/.test(sessionId)) {
-                alert('Please enter a 6-digit job number before saving.');
+                showStatusMessage('Please enter a 6-digit job number before saving.', 'error');
                 sessionIdInput.focus();
                 sessionIdInput.select();
                 return;
@@ -2464,7 +2613,7 @@
             
             // Check for missing assigned name
             if (!assignedTo) {
-                alert('Please select a name from the dropdown before saving.');
+                showStatusMessage('Please select a name from the dropdown before saving.', 'error');
                 assignedToSelect.focus();
                 return;
             }
@@ -2554,7 +2703,8 @@
             input.onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
+
+                showLoading('Loading session...');
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
@@ -2628,11 +2778,13 @@
                         // Reset to the first instance
                         currentInstanceIndex = 0;
                         updateInstanceDisplay();
-                        
+
+                        hideLoading();
                         showStatusMessage('Session loaded successfully!');
                     } catch (error) {
                         console.error('Error loading session:', error);
-                        alert('Failed to load session file. It may be corrupted or in an invalid format.');
+                        hideLoading();
+                        showStatusMessage('Failed to load session file. It may be corrupted or invalid.', 'error');
                     }
                 };
                 
@@ -2642,10 +2794,17 @@
             input.click();
         }
         
-        function showStatusMessage(message) {
+        function showStatusMessage(message, type = 'success') {
             statusMessage.textContent = message;
             statusMessage.classList.remove('hidden');
-            
+
+            // Set color based on type
+            if (type === 'error') {
+                statusMessage.style.color = '#e74c3c';
+            } else {
+                statusMessage.style.color = '#27ae60';
+            }
+
             // Hide the message after 3 seconds
             setTimeout(() => {
                 statusMessage.classList.add('hidden');
