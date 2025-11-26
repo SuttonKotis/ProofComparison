@@ -971,12 +971,12 @@
             const baseScale = Math.min(canvas.width / currentImg.width, canvas.height / currentImg.height);
             const finalScale = baseScale * alignment.scale;
             
-            // Position handle at center of the image (relative to dropZone)
+            // Position handle at center of the image
             const centerX = (canvas.width / 2) + alignment.x;
             const centerY = (canvas.height / 2) + alignment.y;
 
-            scaleHandle.style.left = (centerX - 15) + 'px';
-            scaleHandle.style.top = (centerY - 15) + 'px';
+            scaleHandle.style.left = (dropZone.offsetLeft + centerX - 15) + 'px';
+            scaleHandle.style.top = (dropZone.offsetTop + centerY - 15) + 'px';
             scaleHandle.style.display = ghostMode ? 'block' : 'none';
         }
 
@@ -1602,19 +1602,21 @@
             } else if (isScaling) {
                 const instance = instances[currentInstanceIndex];
                 const alignment = instance.alignmentSettings[`image${instance.currentImage}`];
-                
+
                 // Calculate distance from center
                 const rect = dropZone.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2 + alignment.x;
                 const centerY = rect.top + rect.height / 2 + alignment.y;
-                
+
                 const startDist = Math.sqrt(Math.pow(scaleStartX - centerX, 2) + Math.pow(scaleStartY - centerY, 2));
                 const currentDist = Math.sqrt(Math.pow(e.clientX - centerX, 2) + Math.pow(e.clientY - centerY, 2));
-                
+
                 // Calculate new scale (proportional)
-                const scaleFactor = currentDist / startDist;
+                // Shift key = precision mode (5x more subtle)
+                const rawScaleFactor = currentDist / startDist;
+                const scaleFactor = e.shiftKey ? 1 + (rawScaleFactor - 1) * 0.2 : rawScaleFactor;
                 alignment.scale = Math.max(0.1, Math.min(5, originalScale * scaleFactor));
-                
+
                 showImage(instance.currentImage);
             }
         });
